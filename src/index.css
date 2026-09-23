@@ -1,0 +1,60 @@
+/*
+ * Document-level layout only. All game UI styling lives in `src/ui/ui.css`.
+ *
+ * This file previously held the Vite starter template's blog theme, which
+ * constrained `#root` to a centred 1126px column with side borders and set a
+ * light colour scheme. That collapsed the 3D canvas to a thin strip and fought
+ * the game's own dark styling, so it is gone rather than overridden.
+ */
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* The game is dark, so tell the browser; this styles scrollbars and form
+     controls to match instead of flashing white. */
+  color-scheme: dark;
+  background: #0d1117;
+}
+
+body {
+  font: 16px/1.45 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: #e6edf3;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  overflow: hidden;
+}
+
+/*
+ * The app is the positioning context for the HUD, which is an absolutely
+ * positioned overlay sitting on top of the canvas.
+ */
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0d1117;
+}
+
+/*
+ * react-three-fiber sizes the canvas from its parent, so the parent needs a
+ * real height or the canvas renders at zero height and the court vanishes.
+ * `touch-action: none` stops a touch drag scrolling the page instead of
+ * reaching the game.
+ */
+.app > canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+}

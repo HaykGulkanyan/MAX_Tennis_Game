@@ -1,0 +1,767 @@
+/*
+ * UI chrome for MAX Tennis.
+ *
+ * Two kinds of surface live here. Menus are centred overlay panels that own the
+ * screen and take input normally. The HUD is a transparent layer over the live
+ * WebGL canvas: it must never intercept the pointer, because aiming is done by
+ * moving the mouse across the court. Hence `.hud { pointer-events: none }` with
+ * a narrow opt-in for the few things that are actually clickable.
+ *
+ * Sizing leans on clamp() rather than breakpoints so the same rules hold from a
+ * 360px phone up to a desktop; the invite link gets shared around, so the
+ * menus have to read well on a phone even though playing needs a desktop.
+ */
+
+:root {
+  --bg: #0b1220;
+  --bg-deep: #070c16;
+  --panel: rgba(19, 28, 45, 0.94);
+  --panel-solid: #131c2d;
+  --border: rgba(255, 255, 255, 0.11);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  --text: #eef3fb;
+  --text-dim: #9aa8bf;
+  --text-faint: #6b7a91;
+
+  --accent: #c8f24a;
+  --accent-deep: #a6cf2c;
+  --accent-ink: #16220a;
+  --court: #2f7fe8;
+  --danger: #e8503a;
+  --ok: #37b46b;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --gap: 14px;
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --focus: 0 0 0 3px rgba(200, 242, 74, 0.55);
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+}
+
+/* Stops a wide scoreboard or a long invite URL producing a sideways scroll. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* --- Screens ---------------------------------------------------------- */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 4vw, 32px);
+  overflow-y: auto;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(47, 127, 232, 0.16), transparent 60%),
+    linear-gradient(180deg, rgba(7, 12, 22, 0.86), rgba(7, 12, 22, 0.96));
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: clamp(18px, 5vw, 30px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+
+.panel-wide {
+  max-width: 620px;
+}
+
+.panel-tight {
+  max-width: 360px;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.brand-title {
+  margin: 0;
+  font-size: clamp(1.7rem, 7vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.brand-compact .brand-title {
+  font-size: clamp(1.4rem, 5.5vw, 1.9rem);
+}
+
+.brand-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+.body-text {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.body-text strong {
+  color: var(--text);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* --- Buttons ---------------------------------------------------------- */
+
+.btn {
+  appearance: none;
+  font: inherit;
+  font-weight: 650;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 90ms ease,
+    opacity 120ms ease;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 1.02rem;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-deep);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.btn-ghost {
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn-chip {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 6px;
+  min-height: 38px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+
+.btn-chip:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-chip-on,
+.btn-chip-on:hover {
+  color: var(--accent);
+  background: rgba(200, 242, 74, 0.14);
+  border-color: rgba(200, 242, 74, 0.6);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.row > .btn {
+  flex: 1 1 140px;
+}
+
+/* --- Menu ------------------------------------------------------------- */
+
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.menu-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 0.82rem;
+}
+
+.difficulty {
+  display: flex;
+  gap: 6px;
+}
+
+.howto {
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.howto-title {
+  margin: 12px 0 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.howto-list {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.howto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.howto-row dt {
+  flex: 0 0 auto;
+  min-width: 108px;
+  display: flex;
+  gap: 3px;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.howto-row dd {
+  flex: 1 1 160px;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+.howto-tip {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  font-size: 0.84rem;
+  color: var(--text-dim);
+  background: rgba(47, 127, 232, 0.12);
+  border-left: 3px solid var(--court);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* --- Forms ------------------------------------------------------------ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.field-label {
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 1rem;
+  padding: 12px 14px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+.input[readonly] {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.swatch {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45) inset;
+  transition:
+    transform 110ms ease,
+    box-shadow 110ms ease;
+}
+
+.swatch:hover {
+  transform: scale(1.08);
+}
+
+.swatch:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.swatch-on {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5);
+  transform: scale(1.08);
+}
+
+/* --- Lobby ------------------------------------------------------------ */
+
+.code-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.code-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.code-value {
+  font-size: clamp(1.9rem, 10vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.copy-row .input {
+  flex: 1 1 180px;
+}
+
+.btn-copy {
+  flex: 0 0 auto;
+  min-width: 112px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 0.86rem;
+  color: var(--text-dim);
+}
+
+.lobby-players {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.vs {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 13px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.chip-empty {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.chip-dot {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5) inset;
+}
+
+.chip-name {
+  font-weight: 650;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-you {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.spinner {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+.spinner-lg {
+  width: 26px;
+  height: 26px;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- HUD -------------------------------------------------------------- */
+
+/*
+ * The root is inert on purpose. Anything clickable inside must set
+ * `pointer-events: auto` for itself, or aiming over the canvas breaks.
+ */
+.hud {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font);
+  color: var(--text);
+}
+
+.scoreboard {
+  position: absolute;
+  top: clamp(8px, 2vw, 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2vw, 16px);
+  max-width: calc(100vw - 16px);
+  padding: 8px clamp(10px, 3vw, 20px);
+  background: rgba(7, 12, 22, 0.66);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+.score-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.score-side-right {
+  justify-content: flex-end;
+}
+
+.score-dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5) inset;
+}
+
+.score-name {
+  font-size: clamp(0.78rem, 2.4vw, 0.98rem);
+  font-weight: 650;
+  color: var(--text-dim);
+  max-width: clamp(60px, 22vw, 170px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-value {
+  font-size: clamp(1.4rem, 5vw, 2rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-sep {
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 800;
+  color: var(--text-faint);
+}
+
+.serve-hint {
+  position: absolute;
+  top: calc(clamp(8px, 2vw, 18px) + 62px);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+
+.net-indicator {
+  position: absolute;
+  top: clamp(8px, 2vw, 18px);
+  right: clamp(8px, 2vw, 18px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  background: rgba(7, 12, 22, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.net-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.net-dot-ok {
+  background: var(--ok);
+}
+
+.net-dot-bad {
+  background: var(--danger);
+}
+
+.callout {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100vw - 24px);
+  text-align: center;
+  font-size: clamp(2.1rem, 11vw, 4.4rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 4px 22px rgba(0, 0, 0, 0.9);
+  animation: callout-pop 380ms cubic-bezier(0.18, 1.3, 0.4, 1) both;
+}
+
+@keyframes callout-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* The rejoin overlay is the one HUD layer that should block the canvas. */
+.hud-blocker {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(7, 12, 22, 0.78);
+  backdrop-filter: blur(3px);
+}
+
+.waiting-text {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+/* --- Match over ------------------------------------------------------- */
+
+.final-score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.final-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.final-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.final-value {
+  flex: 0 0 auto;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Motion ----------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .swatch {
+    transition: none;
+  }
+
+  .spinner,
+  .callout {
+    animation: none;
+  }
+}
