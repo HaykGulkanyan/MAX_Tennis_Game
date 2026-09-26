@@ -571,3 +571,26 @@ export function step(
   snapshot.tick += 1;
   return events;
 }
+
+/**
+ * Advance ONLY one player, for client-side prediction on the guest.
+ *
+ * The guest must not run `step`: that simulates the ball and the match clock
+ * too, and since the guest never receives the opponent's inputs its ball
+ * immediately diverges from the host's. It also advances `snapshot.tick`, which
+ * made the guest's clock race ahead of the 20Hz snapshot stream so every
+ * incoming snapshot looked stale and was discarded. The guest then rendered a
+ * ball nobody was updating, which is why the ball appeared to vanish.
+ *
+ * Predicting only the local player keeps movement responsive while leaving the
+ * ball, the score and the tick strictly authoritative.
+ */
+export function predictPlayer(
+  snapshot: GameSnapshot,
+  side: PlayerSide,
+  input: PlayerInput,
+  dt: number = TICK,
+): void {
+  if (snapshot.paused) return;
+  stepPlayer(snapshot.players[side], input, side, dt);
+}

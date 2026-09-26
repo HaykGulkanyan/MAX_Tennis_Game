@@ -11,7 +11,12 @@
  */
 
 import { SNAPSHOT_INTERVAL, TICK } from './constants';
-import { createInitialSnapshot, resetMatch, step } from './simulation';
+import {
+  createInitialSnapshot,
+  predictPlayer,
+  resetMatch,
+  step,
+} from './simulation';
 import type {
   GameEvent,
   GameSnapshot,
@@ -80,6 +85,8 @@ export class Engine {
   private delayedInputs: PlayerInput[] = [];
   /** Seq of the last of our own inputs actually fed to the simulation. */
   private lastAppliedSelfSeq = 0;
+  /** Highest host tick adopted, so out-of-order packets can be dropped. */
+  private lastAppliedTick = -1;
 
   constructor(options: EngineOptions) {
     this.options = options;
@@ -119,7 +126,12 @@ export class Engine {
    * has not seen yet so this client's own player does not snap backwards.
    */
   applySnapshot(incoming: GameSnapshot): void {
-    if (incoming.tick < this.snapshot.tick) return; // stale packet
+    // Drop genuinely out-of-order packets, but accept an equal tick: the guest
+    // no longer advances `tick` itself, so a repeated tick is a legitimate
+    // retransmit rather than a stale one. Using `<=` here was the second half
+    // of the vanishing-ball bug, because it discarded good snapshots.
+    if (incoming.tick < this.lastAppliedTick) return;
+    this.lastAppliedTick = incoming.tick;
 
     this.snapshot = incoming;
 
@@ -132,11 +144,7 @@ export class Engine {
     // the opponent is left exactly as the host reported, because guessing
     // their movement produces visible rubber-banding when the guess is wrong.
     for (const input of this.pending) {
-      const inputs: [PlayerInput, PlayerInput] =
-        this.side === 0
-          ? [input, { ...EMPTY_INPUT }]
-          : [{ ...EMPTY_INPUT }, input];
-      step(this.snapshot, inputs);
+      predictPlayer(this.snapshot, this.side, input);
     }
   }
 
@@ -162,9 +170,7 @@ export class Engine {
       // Hand the host the exact input we predicted with, so its authoritative
       // result matches our prediction.
       this.options.onLocalInput?.(local);
-      const inputs: [PlayerInput, PlayerInput] =
-        this.side === 0 ? [local, { ...EMPTY_INPUT }] : [{ ...EMPTY_INPUT }, local];
-      step(this.snapshot, inputs);
+      predictPlayer(this.snapshot, this.side, local);
       return;
     }
 

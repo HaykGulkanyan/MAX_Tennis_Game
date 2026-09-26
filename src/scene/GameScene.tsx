@@ -155,7 +155,22 @@ export function GameScene({ engine, input, side }: Props) {
 
     if (ball.current) {
       const p = snapshot.ball.position;
-      ball.current.position.set(p.x, p.y, p.z);
+      if (engine.role === 'guest' || engine.role === 'spectator') {
+        /*
+         * A guest's snapshot only updates at the host's 20Hz broadcast rate,
+         * so snapping the ball straight to it makes the ball jump three frames
+         * at a time and look like it is teleporting or disappearing. Easing
+         * toward the authoritative position renders the 60Hz motion between
+         * snapshots. The target is still fully authoritative; only the visual
+         * catch-up is smoothed.
+         */
+        const blend = 1 - Math.exp(-28 * delta);
+        ball.current.position.x += (p.x - ball.current.position.x) * blend;
+        ball.current.position.y += (p.y - ball.current.position.y) * blend;
+        ball.current.position.z += (p.z - ball.current.position.z) * blend;
+      } else {
+        ball.current.position.set(p.x, p.y, p.z);
+      }
     }
 
     // The blob shadow is the main height cue: it sits under the ball and
@@ -166,9 +181,16 @@ export function GameScene({ engine, input, side }: Props) {
       // apexes around 3m, so a gentler curve would leave the shadow nearly
       // constant and useless. Depth is already hard to read on this camera, so
       // the shadow has to carry it.
-      const height = Math.max(0, p.y - PHYSICS.ballRadius);
+      // Track the RENDERED ball, not the raw snapshot: on a guest the ball is
+      // eased between snapshots, and a shadow following the snapshot directly
+      // would visibly detach from the ball it belongs to.
+      const shown = ball.current?.position;
+      const bx = shown ? shown.x : p.x;
+      const by = shown ? shown.y : p.y;
+      const bz = shown ? shown.z : p.z;
+      const height = Math.max(0, by - PHYSICS.ballRadius);
       const scale = THREE.MathUtils.clamp(1 - height / 6, 0.25, 1);
-      ballShadow.current.position.set(p.x, 0.02, p.z);
+      ballShadow.current.position.set(bx, 0.02, bz);
       ballShadow.current.scale.setScalar(scale);
       const material = ballShadow.current.material as THREE.Material & {
         opacity: number;

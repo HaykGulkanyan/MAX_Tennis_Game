@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "check:sim": "esbuild ./test/simulation.check.ts --bundle --platform=node --format=esm --outfile=./node_modules/.cache/simcheck.mjs && node ./node_modules/.cache/simcheck.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:guest": "esbuild ./test/guest.check.ts --bundle --platform=node --format=esm --outfile=./node_modules/.cache/guestcheck.mjs && node ./node_modules/.cache/guestcheck.mjs",
+    "check": "npm run check:sim && npm run check:guest"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",
