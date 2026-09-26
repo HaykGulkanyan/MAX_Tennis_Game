@@ -100,6 +100,26 @@ export default function App() {
     setUnsupported(coarse);
   }, [setUnsupported]);
 
+  /*
+   * C cycles the camera. Handled here rather than in the input controller
+   * because it is a view preference, not gameplay input: it never reaches the
+   * simulation and so must not travel to the host.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyC' || event.repeat) return;
+      // Ignore it while the player is typing their name.
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      useStore.getState().cycleCameraMode();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // An invite link lands here: capture the code and go straight to the name
   // prompt, so joining is one step.
   useEffect(() => {

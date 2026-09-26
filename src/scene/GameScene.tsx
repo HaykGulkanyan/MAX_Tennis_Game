@@ -45,6 +45,84 @@ const CAMERA = {
   fov: 50,
 } as const;
 
+/**
+ * Per-mode camera rigs.
+ *
+ * `fov` is applied to the shared camera each frame rather than at mount, so
+ * switching mode mid-rally takes effect immediately.
+ *
+ * A note on aiming, which constrains these more than looks do: the aim point
+ * is the cursor raycast onto the ground plane, so the flatter the camera, the
+ * further the aim slides per pixel of mouse movement. Measured over a 5% mouse
+ * move, the broadcast rig sweeps about 86m of court depth (coarse but always
+ * on court), third person about 0.4m and first person about 0.3m (precise).
+ * The closer rigs are therefore better for placement, at the cost of seeing
+ * less of the court.
+ */
+const RIGS = {
+  broadcast: {
+    fov: 50,
+    /** Fixed vantage; does not follow the player's depth. */
+    follow: 0.14,
+    eyeHeight: CAMERA.height,
+    back: CAMERA.depth,
+    side: CAMERA.sideOffset,
+    lookHeight: 0.6,
+    lookAhead: -1.0,
+    hideSelf: false,
+  },
+  third: {
+    fov: 62,
+    follow: 0.9,
+    eyeHeight: 3.4,
+    back: 6.2,
+    side: 0,
+    lookHeight: 1.0,
+    lookAhead: 9,
+    hideSelf: false,
+  },
+  first: {
+    fov: 72,
+    follow: 1,
+    eyeHeight: 1.62,
+    /*
+     * Just behind the player's centre. Sitting exactly on it makes the view
+     * pivot around the camera itself, so backing up barely changes the image
+     * and depth becomes unreadable; a small offset keeps the motion legible
+     * and keeps the racket in frame.
+     */
+    back: 0.75,
+    side: 0,
+    lookHeight: 0.72,
+    lookAhead: 11,
+    /** Your own body would otherwise fill the screen. */
+    hideSelf: true,
+  },
+} as const;
+
+/**
+ * Screen height of the horizon, in normalised device coordinates.
+ *
+ * Anything above this projects into the sky and can never hit the ground
+ * plane, so the aim raycast has to be kept below it. Derived from the camera's
+ * own orientation, so it stays correct for every rig. The small margin keeps
+ * the aim off the horizon itself, where the ray is so near-parallel to the
+ * ground that it lands absurdly far away.
+ */
+function horizonNdcY(camera: THREE.Camera): number {
+  scratchHorizon.dir.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  // Pitch below horizontal; if the camera looks up, there is no usable ground.
+  const pitch = Math.asin(THREE.MathUtils.clamp(-scratchHorizon.dir.y, -1, 1));
+  if (!(camera instanceof THREE.PerspectiveCamera)) return 0.9;
+  const halfFov = THREE.MathUtils.degToRad(camera.fov) / 2;
+  if (pitch <= 0) return -0.15;
+  // Where the horizon falls within the vertical frustum, as -1..1.
+  const y = -Math.tan(pitch) / Math.tan(halfFov);
+  return THREE.MathUtils.clamp(y - 0.04, -0.98, 0.98);
+}
+
+const scratchHorizon = { dir: new THREE.Vector3() };
+
 /** Reusable scratch objects, so the frame loop never allocates. */
 const scratch = {
   ray: new THREE.Raycaster(),
@@ -68,6 +146,12 @@ export function GameScene({ engine, input, side }: Props) {
 
   const profiles = useStore((s) => s.profiles);
   const syncMatch = useStore((s) => s.syncMatch);
+  /*
+   * Subscribing here re-renders the scene when the player switches camera,
+   * which is exactly once per switch rather than per frame, so it is cheap.
+   * The frame loop reads the value through this binding.
+   */
+  const cameraMode = useStore((s) => s.cameraMode);
 
   /**
    * Smoothed camera target, so the view glides instead of snapping. It starts
@@ -112,7 +196,17 @@ export function GameScene({ engine, input, side }: Props) {
     // 1. Aim: project the pointer onto the court plane and hand the world
     // coordinates to the input controller, which folds them into the input.
     if (pointerRef.current.inside) {
-      scratch.pointer.set(pointerRef.current.x, pointerRef.current.y);
+      /*
+       * A ray aimed above the horizon never meets the ground, so it returns
+       * nothing and the aim would silently freeze wherever it last landed.
+       * That is rare in the broadcast view but constant in first person, where
+       * the camera looks nearly level and the whole upper half of the screen
+       * is sky. Clamping the pointer below the horizon keeps aiming continuous
+       * instead of sticking, so the marker always tracks the mouse.
+       */
+      const horizonY = horizonNdcY(camera);
+      const clampedY = Math.min(pointerRef.current.y, horizonY);
+      scratch.pointer.set(pointerRef.current.x, clampedY);
       scratch.ray.setFromCamera(scratch.pointer, camera);
       if (scratch.ray.ray.intersectPlane(scratch.courtPlane, scratch.hit)) {
         input.setAimPoint(scratch.hit.x, scratch.hit.z);
@@ -214,42 +308,66 @@ export function GameScene({ engine, input, side }: Props) {
     }
 
     /*
-     * 4. Camera: an elevated three-quarter broadcast view.
+     * 4. Camera. Three rigs, chosen by the player; see RIGS above.
      *
-     * A camera placed directly behind the player looking straight down the
-     * court is the obvious choice and it looks terrible: the court is 8.2m
-     * wide but 23.8m long, so end-on it fills about 30% of the screen's width
-     * against 56% of its height and reads as a narrow corridor rather than a
-     * tennis court. Offsetting the camera to one side and looking diagonally
-     * across shows both the width and the length, which is exactly why real
-     * tennis is televised from this angle. Measured, the court goes from
-     * roughly 30x56% of the screen to 52x58%.
+     * The broadcast rig is offset to one side because a camera placed directly
+     * behind the player looking down the court reads as a narrow corridor: the
+     * court is 8.2m wide but 23.8m long, so end-on it covers about 30% of the
+     * screen's width against 56% of its height. Viewed diagonally it covers
+     * roughly 52x58%, which is why real tennis is televised from that angle.
      *
-     * The camera also deliberately does NOT track the player's depth. Aiming
-     * raycasts the cursor onto the court, so camera motion slides the aim
-     * point under a stationary mouse; following Z one-for-one dragged the aim
-     * downcourt at the player's own running speed and made aiming and moving
-     * mutually exclusive. Only a gentle sideways ease remains.
+     * `follow` controls how much the rig tracks the player's own position.
+     * Aiming raycasts the cursor onto the ground, so camera motion slides the
+     * aim point under a stationary mouse; the broadcast rig therefore stays
+     * put (follow 0.14 sideways, none in depth) while the closer rigs must
+     * follow the player to be usable at all, and accept that the aim moves
+     * with them.
      */
     const self = snapshot.players[side];
     const behind = side === 0 ? -1 : 1;
-    scratch.desiredCamera.set(
-      CAMERA.sideOffset + self.position.x * 0.14,
-      CAMERA.height,
-      behind * CAMERA.depth,
-    );
-    // Look at the middle of the court so both halves stay framed.
-    scratch.desiredTarget.set(
-      self.position.x * 0.08,
-      0.6,
-      behind * -1.0,
-    );
+    const rig = RIGS[cameraMode];
 
-    // Exponential smoothing, framerate independent.
-    const blend = 1 - Math.exp(-6 * delta);
+    if (cameraMode === 'broadcast') {
+      scratch.desiredCamera.set(
+        rig.side + self.position.x * rig.follow,
+        rig.eyeHeight,
+        behind * rig.back,
+      );
+      scratch.desiredTarget.set(
+        self.position.x * 0.08,
+        rig.lookHeight,
+        behind * rig.lookAhead,
+      );
+    } else {
+      // Sit behind the player, looking down the court toward the opponent.
+      scratch.desiredCamera.set(
+        self.position.x * rig.follow,
+        rig.eyeHeight,
+        self.position.z + behind * rig.back,
+      );
+      scratch.desiredTarget.set(
+        self.position.x * rig.follow * 0.6,
+        rig.lookHeight,
+        self.position.z - behind * rig.lookAhead,
+      );
+    }
+
+    if (camera instanceof THREE.PerspectiveCamera && camera.fov !== rig.fov) {
+      camera.fov = rig.fov;
+      camera.updateProjectionMatrix();
+    }
+
+    // Exponential smoothing, framerate independent. The close rigs snap harder
+    // so the view does not lag behind the player they are attached to.
+    const followRate = cameraMode === 'broadcast' ? 6 : 16;
+    const blend = 1 - Math.exp(-followRate * delta);
     camera.position.lerp(scratch.desiredCamera, blend);
     cameraLook.lerp(scratch.desiredTarget, blend);
     camera.lookAt(cameraLook);
+
+    // Hide our own body in first person, or it fills the screen.
+    const ownGroup = side === 0 ? player0.current : player1.current;
+    if (ownGroup) ownGroup.visible = !rig.hideSelf;
 
     /*
      * 5. Hand the input controller the camera's basis, flattened onto the

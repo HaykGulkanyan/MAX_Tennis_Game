@@ -185,3 +185,17 @@ export type GameMode = 'menu' | 'ai' | 'host' | 'guest' | 'spectator' | 'practic
 
 /** AI opponent strength. */
 export type Difficulty = 'easy' | 'medium' | 'hard';
+
+/**
+ * Which camera the player is using. Purely a client-side view preference: it
+ * never reaches the simulation, so the two players can each pick their own.
+ */
+export type CameraMode = 'broadcast' | 'third' | 'first';
+
+export const CAMERA_MODES: readonly CameraMode[] = ['broadcast', 'third', 'first'];
+
+export const CAMERA_MODE_LABELS: Record<CameraMode, string> = {
+  broadcast: 'Broadcast',
+  third: 'Third person',
+  first: 'First person',
+};

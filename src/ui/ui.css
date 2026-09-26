@@ -765,3 +765,67 @@ kbd {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------- *
+ * Camera switcher
+ *
+ * The HUD root sets `pointer-events: none` so the mouse reaches the
+ * court for aiming; this is one of the few children that opts back in.
+ * ---------------------------------------------------------------- */
+
+.camera-switcher {
+  position: absolute;
+  left: clamp(8px, 2vw, 18px);
+  bottom: clamp(8px, 2vw, 18px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(13, 17, 23, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.cam-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: clamp(11px, 1.1vw, 13px);
+  color: rgba(230, 237, 243, 0.72);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.cam-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6edf3;
+}
+
+.cam-btn.is-active {
+  background: var(--accent, #2d7dd2);
+  color: #fff;
+}
+
+.cam-btn:focus-visible {
+  outline: 2px solid var(--focus, #7cc4ff);
+  outline-offset: 2px;
+}
+
+.cam-hint {
+  padding: 0 8px 0 4px;
+  font-size: clamp(10px, 1vw, 11px);
+  color: rgba(230, 237, 243, 0.4);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .cam-hint {
+    display: none;
+  }
+}

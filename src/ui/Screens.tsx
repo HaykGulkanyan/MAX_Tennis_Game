@@ -15,7 +15,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Difficulty, PlayerProfile, PlayerSide } from '../game/types';
+import type { CameraMode, Difficulty, PlayerProfile, PlayerSide } from '../game/types';
+import { CAMERA_MODES, CAMERA_MODE_LABELS } from '../game/types';
 import { MATCH, SHIRT_COLORS } from '../game/constants';
 import { useStore } from '../state/store';
 import { inviteUrlFor } from '../net/peer';
@@ -439,6 +440,8 @@ export function Hud(): React.ReactElement {
         </p>
       ) : null}
 
+      <CameraSwitcher />
+
       {networked ? (
         <div className="net-indicator">
           <span
@@ -548,5 +551,35 @@ export function UnsupportedScreen(): React.ReactElement {
         Open this link again on a laptop or desktop and you are good to go.
       </p>
     </ScreenShell>
+  );
+}
+
+
+/**
+ * Camera picker, shown during a match.
+ *
+ * Needs `pointer-events: auto` because the HUD root disables them so the
+ * mouse can reach the court for aiming.
+ */
+function CameraSwitcher(): React.ReactElement {
+  const cameraMode = useStore((s) => s.cameraMode);
+  const setCameraMode = useStore((s) => s.setCameraMode);
+
+  return (
+    <div className="camera-switcher" role="radiogroup" aria-label="Camera view">
+      {CAMERA_MODES.map((mode: CameraMode) => (
+        <button
+          key={mode}
+          type="button"
+          role="radio"
+          aria-checked={cameraMode === mode}
+          className={cameraMode === mode ? 'cam-btn is-active' : 'cam-btn'}
+          onClick={() => setCameraMode(mode)}
+        >
+          {CAMERA_MODE_LABELS[mode]}
+        </button>
+      ))}
+      <span className="cam-hint">press C</span>
+    </div>
   );
 }

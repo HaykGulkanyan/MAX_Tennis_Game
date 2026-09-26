@@ -15,6 +15,7 @@
 
 import { create } from 'zustand';
 import type {
+  CameraMode,
   ConnectionStatus,
   Difficulty,
   GameMode,
@@ -35,6 +36,8 @@ export type StoreState = {
   screen: UiScreen;
   mode: GameMode;
   difficulty: Difficulty;
+  /** View preference, local to this client only. */
+  cameraMode: CameraMode;
 
   /** This client's own profile, and which side it controls. */
   profile: PlayerProfile;
@@ -63,6 +66,8 @@ export type StoreState = {
   setScreen: (screen: UiScreen) => void;
   setMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
+  setCameraMode: (cameraMode: CameraMode) => void;
+  cycleCameraMode: () => void;
   setProfile: (profile: Partial<PlayerProfile>) => void;
   setProfiles: (profiles: [PlayerProfile, PlayerProfile]) => void;
   setSide: (side: PlayerSide) => void;
@@ -90,6 +95,7 @@ const initial = {
   screen: 'menu' as UiScreen,
   mode: 'menu' as GameMode,
   difficulty: 'medium' as Difficulty,
+  cameraMode: 'broadcast' as CameraMode,
   profile: defaultProfile(),
   side: 0 as PlayerSide,
   profiles: [defaultProfile(), defaultProfile()] as [PlayerProfile, PlayerProfile],
@@ -110,6 +116,13 @@ export const useStore = create<StoreState>((set) => ({
   setScreen: (screen) => set({ screen }),
   setMode: (mode) => set({ mode }),
   setDifficulty: (difficulty) => set({ difficulty }),
+  setCameraMode: (cameraMode) => set({ cameraMode }),
+  cycleCameraMode: () =>
+    set((s) => {
+      const order: CameraMode[] = ['broadcast', 'third', 'first'];
+      const next = order[(order.indexOf(s.cameraMode) + 1) % order.length];
+      return { cameraMode: next };
+    }),
   setProfile: (profile) =>
     set((s) => ({ profile: { ...s.profile, ...profile } })),
   setProfiles: (profiles) => set({ profiles }),
