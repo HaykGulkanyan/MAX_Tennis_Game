@@ -297,8 +297,17 @@ export function GameScene({ engine, input, side }: Props) {
     // ring sit on your own half or behind your baseline while the shot went
     // somewhere else entirely, so the marker was actively misleading.
     if (aim.current) {
-      const own = snapshot.players[side];
-      const target = clampAim(own.aim.x, own.aim.z, side);
+      /*
+       * Drawn from the live mouse aim rather than the snapshot. On the host the
+       * snapshot's aim trails the mouse by the fairness delay, and on a guest
+       * it is overwritten by each host update, so the ring visibly lagged and
+       * stuttered behind the cursor. The shot uses the same point once the
+       * input is applied. A spectator has no aim of its own, so it keeps the
+       * snapshot's.
+       */
+      const raw =
+        engine.role === 'spectator' ? snapshot.players[side].aim : input.getAim();
+      const target = clampAim(raw.x, raw.z, side);
       aim.current.position.set(target.x, 0.02, target.z);
       // Hide it when there is no shot to aim: between points and once the
       // match is decided.

@@ -298,7 +298,13 @@ export function clampAim(
    */
   const minZ = PLAYER.netKeepout - PLAYER.netReach + 0.25;
   const maxZ = COURT.halfLength - 0.4;
-  const depth = Math.max(minZ, Math.min(maxZ, Math.abs(aimZ)));
+  /*
+   * Depth is measured toward the opponent, signed, so an aim on your own half
+   * clamps to the nearest legal point: just over the net. Taking `Math.abs`
+   * here used to mirror it instead, so pulling the mouse back toward yourself
+   * sent the marker deeper into the far court, the opposite of the hand.
+   */
+  const depth = Math.max(minZ, Math.min(maxZ, dir * aimZ));
   return { x, z: dir * depth };
 }
 

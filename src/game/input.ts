@@ -32,6 +32,8 @@ export type InputController = {
     right: { x: number; z: number },
     forward: { x: number; z: number },
   ): void;
+  /** The latest aim point, for drawing the marker without network delay. */
+  getAim(): { x: number; z: number };
   /** Current charge 0..1, for drawing the power bar. */
   getCharge(): number;
   /** True while right mouse is held. */
@@ -341,6 +343,7 @@ export function createInputController(): InputController {
       cameraBasis.forward.z = forward.z;
       cameraBasis.ready = true;
     },
+    getAim: () => ({ x: aimX, z: aimZ }),
     getCharge: currentCharge,
     isCharging: () => charging,
     attach,
