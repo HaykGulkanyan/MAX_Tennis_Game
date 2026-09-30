@@ -81,6 +81,8 @@ export default function App() {
   const inputRef = useRef<InputController | null>(null);
   const hostRef = useRef<HostHandle | null>(null);
   const guestRef = useRef<GuestHandle | null>(null);
+  /** True from the Join click until the connection settles. */
+  const joiningRef = useRef(false);
   const calloutTimer = useRef<number | null>(null);
   const pingTimerRef = useRef<number | null>(null);
   /** Held so a rematch can clear the AI's carried-over state. */
@@ -186,6 +188,7 @@ export default function App() {
     hostRef.current = null;
     guestRef.current?.close();
     guestRef.current = null;
+    joiningRef.current = false;
     if (pingTimerRef.current !== null) {
       window.clearInterval(pingTimerRef.current);
       pingTimerRef.current = null;
@@ -292,6 +295,16 @@ export default function App() {
           setProfiles(pair);
           // Send them on, or the guest shows two blank default players.
           hostRef.current?.broadcast({ kind: 'profiles', profiles: pair });
+
+          // Joining a match already under way (a rejoin after a drop or a
+          // refresh). The guest waits on the name screen for 'start', which
+          // only goes out when the match begins, so without this they would
+          // sit there forever.
+          const engine = engineRef.current;
+          if (engine) {
+            engine.resetRemoteInput();
+            hostRef.current?.broadcast({ kind: 'start' });
+          }
         },
         onPeerLeft: (role) => {
           if (role !== 'player') return;
@@ -355,8 +368,12 @@ export default function App() {
   const joinAsGuest = useCallback(async () => {
     if (!joiningCode) return;
     // A second connection would be seated as a spectator, whose engine never
-    // ticks, so the player would appear frozen with no explanation.
-    if (guestRef.current) return;
+    // ticks, so the player would appear frozen with no explanation. The guard
+    // has to be set before the await: `guestRef` is only filled once the
+    // connection opens, and a second click on "Join match" while it was still
+    // connecting used to slip through and seat the joiner as a spectator.
+    if (guestRef.current || joiningRef.current) return;
+    joiningRef.current = true;
     initAudio();
     playUiClick();
     setMode('guest');
@@ -432,6 +449,8 @@ export default function App() {
       pingTimerRef.current = pingTimer;
     } catch {
       setConnection('error');
+      // Let them press Join again; nothing is connected to be duplicated.
+      joiningRef.current = false;
     }
   }, [
     buildEngine,

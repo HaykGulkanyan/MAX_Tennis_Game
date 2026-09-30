@@ -122,6 +122,16 @@ export class Engine {
   }
 
   /**
+   * Host: forget the previous guest's input stream. A rejoining guest starts
+   * its sequence numbers from 1 again, so without this every one of its inputs
+   * would be discarded as out of order, and the ack would stay ahead of all of
+   * them, so the guest could never move.
+   */
+  resetRemoteInput(): void {
+    this.latestRemote = { ...EMPTY_INPUT };
+  }
+
+  /**
    * Guest: adopt an authoritative snapshot, then re-apply the inputs the host
    * has not seen yet so this client's own player does not snap backwards.
    */

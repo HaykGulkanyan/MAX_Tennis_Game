@@ -345,8 +345,31 @@ export function startHost(callbacks: HostCallbacks): Promise<HostHandle> {
       connection.on('open', () => {
         const wantsPlayer =
           (connection.metadata as { role?: unknown } | undefined)?.role !== 'spectator';
-        const seatFree = playerConnectionId === null;
-        const role: PeerRole = wantsPlayer && seatFree ? 'player' : 'spectator';
+
+        /*
+         * The newest player takes the seat. Only the friend has the link, so a
+         * second player connection is nearly always that same person: a
+         * refreshed tab whose old channel has not timed out yet, the link
+         * opened twice, or a double-clicked Join. Seating them as a spectator
+         * instead left them watching a match they could not move in. The old
+         * connection is dropped quietly, without the pause a real drop gets,
+         * because its replacement is already here.
+         */
+        if (wantsPlayer && playerConnectionId !== null) {
+          const previous = peers.get(playerConnectionId);
+          peers.delete(playerConnectionId);
+          playerConnectionId = null;
+          if (previous) {
+            previous.connection.removeAllListeners();
+            try {
+              previous.connection.close();
+            } catch {
+              /* already gone */
+            }
+          }
+        }
+
+        const role: PeerRole = wantsPlayer ? 'player' : 'spectator';
 
         // Side 1 either way: the host is always side 0, and a spectator still
         // needs a side so the engine knows which end to put its camera behind.

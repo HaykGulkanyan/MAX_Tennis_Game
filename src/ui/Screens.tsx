@@ -192,7 +192,16 @@ export function ProfileScreen(props: {
 }): React.ReactElement {
   const profile = useStore((s) => s.profile);
   const setProfile = useStore((s) => s.setProfile);
-  const ready = profile.name.trim().length > 0;
+  const connection = useStore((s) => s.connection);
+  /*
+   * Joining leaves this screen up until the host starts the match, so without
+   * feedback the button looks dead and people click it again. Lock it while
+   * the connection is being made or is waiting on the host.
+   */
+  const joining =
+    props.joiningCode !== null &&
+    (connection === 'connecting' || connection === 'connected');
+  const ready = profile.name.trim().length > 0 && !joining;
 
   const submit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -256,7 +265,13 @@ export function ProfileScreen(props: {
             Back
           </button>
           <button type="submit" className="btn btn-primary" disabled={!ready}>
-            {props.joiningCode !== null ? 'Join match' : 'Continue'}
+            {props.joiningCode === null
+              ? 'Continue'
+              : connection === 'connecting'
+                ? 'Connecting...'
+                : connection === 'connected'
+                  ? 'Waiting for host...'
+                  : 'Join match'}
           </button>
         </div>
       </form>
