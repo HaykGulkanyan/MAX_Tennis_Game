@@ -116,8 +116,14 @@ function horizonNdcY(camera: THREE.Camera): number {
   if (!(camera instanceof THREE.PerspectiveCamera)) return 0.9;
   const halfFov = THREE.MathUtils.degToRad(camera.fov) / 2;
   if (pitch <= 0) return -0.15;
-  // Where the horizon falls within the vertical frustum, as -1..1.
-  const y = -Math.tan(pitch) / Math.tan(halfFov);
+  /*
+   * Where the horizon falls within the vertical frustum, as -1..1. Looking
+   * down puts the horizon ABOVE the centre of the screen, so this is positive.
+   * It was once negated, which put the "horizon" at the bottom edge and
+   * clamped every pointer position there: the aim froze in one spot whatever
+   * the mouse did.
+   */
+  const y = Math.tan(pitch) / Math.tan(halfFov);
   return THREE.MathUtils.clamp(y - 0.04, -0.98, 0.98);
 }
 
