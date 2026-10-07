@@ -403,7 +403,10 @@ export function LobbyScreen(props: {
 
 // --- HUD ----------------------------------------------------------------
 
-export function Hud(): React.ReactElement {
+export function Hud(props: {
+  /** Reads this player's shot charge, 0..1. Omitted for a spectator. */
+  getCharge?: () => number;
+}): React.ReactElement {
   const profiles = useStore((s) => s.profiles);
   const scores = useStore((s) => s.scores);
   const phase = useStore((s) => s.phase);
@@ -456,6 +459,10 @@ export function Hud(): React.ReactElement {
       ) : null}
 
       <CameraSwitcher />
+
+      {props.getCharge && mode !== 'spectator' ? (
+        <PowerMeter getCharge={props.getCharge} />
+      ) : null}
 
       {networked ? (
         <div className="net-indicator">
@@ -576,6 +583,42 @@ export function UnsupportedScreen(): React.ReactElement {
  * Needs `pointer-events: auto` because the HUD root disables them so the
  * mouse can reach the court for aiming.
  */
+/**
+ * Shot power bar. Charge changes every frame while right mouse is held, so this
+ * runs its own animation loop and writes straight to the DOM; routing it
+ * through React state would re-render the whole HUD sixty times a second.
+ */
+function PowerMeter(props: { getCharge: () => number }): React.ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+  const { getCharge } = props;
+
+  useEffect(() => {
+    let frame = 0;
+    const tick = () => {
+      const charge = Math.max(0, Math.min(1, getCharge()));
+      if (fillRef.current) fillRef.current.style.transform = `scaleX(${charge})`;
+      if (rootRef.current) {
+        rootRef.current.classList.toggle('is-charging', charge > 0);
+        rootRef.current.classList.toggle('is-full', charge >= 0.999);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [getCharge]);
+
+  return (
+    <div className="power-meter" ref={rootRef} aria-hidden="true">
+      <span className="power-label">Power</span>
+      <div className="power-track">
+        <div className="power-fill" ref={fillRef} />
+      </div>
+      <span className="power-hint">hold right click</span>
+    </div>
+  );
+}
+
 function CameraSwitcher(): React.ReactElement {
   const cameraMode = useStore((s) => s.cameraMode);
   const setCameraMode = useStore((s) => s.setCameraMode);

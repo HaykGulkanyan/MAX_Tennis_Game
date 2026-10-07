@@ -103,12 +103,26 @@ export const SHOT = {
    * feeble lob that never reaches the other side.
    */
   minPower: 9.0,
-  /** Speed of a fully charged shot. */
-  maxPower: 22.0,
-  /** Seconds of holding right mouse to reach full charge. */
-  chargeTime: 1.1,
+  /**
+   * Speed of a fully charged shot. Raised from 22 so charging is clearly worth
+   * it. The ceiling is the defender's recovery run (see PLAYER.moveSpeed): a
+   * full-power shot must still give them a chance to get there.
+   */
+  maxPower: 26.0,
+  /**
+   * Seconds of holding right mouse to reach full charge. Cut from 1.1, which
+   * was longer than the gap between shots in a quick exchange, so full power
+   * was out of reach exactly when it mattered.
+   */
+  chargeTime: 0.7,
+  /**
+   * How long a charge is kept after right mouse is released, in seconds.
+   * Without it the charge was gone one frame after letting go, so releasing a
+   * moment before contact threw the whole charge away.
+   */
+  releaseGrace: 0.5,
   /** Serve speed at zero charge. */
-  servePower: 15.0,
+  servePower: 16.0,
 } as const;
 
 export const MATCH = {

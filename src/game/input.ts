@@ -103,10 +103,14 @@ export function createInputController(): InputController {
    * fires) in the same instant, but the release event almost always arrives
    * before the next `sample()`. If release reset the charge to 0 immediately,
    * the shot would always read 0 charge and charging would do nothing at all.
-   * So on release we stash the level reached here, `sample()` reports it once,
-   * and then clears it. One sample of hold-over, exactly as agreed.
+   * So on release we stash the level reached here, and `sample()` keeps
+   * reporting it for `SHOT.releaseGrace` seconds or until a click spends it.
+   * It used to last a single sample, which threw the charge away whenever
+   * the player let go even a frame before contact.
    */
   let releasedCharge = 0;
+  /** When right mouse came up, for the release grace window. */
+  let releasedAt = 0;
 
   /** Ground-plane camera basis, fed by the scene each frame. */
   const cameraBasis = {
@@ -126,7 +130,12 @@ export function createInputController(): InputController {
       const elapsed = (nowMs() - chargeStart) / 1000;
       return clamp01(elapsed / SHOT.chargeTime);
     }
-    return releasedCharge;
+    // A released charge survives a short grace window, so letting go a moment
+    // before contact still powers the shot. See SHOT.releaseGrace.
+    if (releasedCharge > 0 && (nowMs() - releasedAt) / 1000 <= SHOT.releaseGrace) {
+      return releasedCharge;
+    }
+    return 0;
   }
 
   function nowMs(): number {
@@ -192,6 +201,7 @@ export function createInputController(): InputController {
     if (me.button !== 2 || !charging) return;
     // Freeze the level reached so the shot taken on this release gets it.
     releasedCharge = currentCharge();
+    releasedAt = nowMs();
     charging = false;
     chargeStart = 0;
   };
@@ -307,16 +317,18 @@ export function createInputController(): InputController {
     /*
      * Charge / shoot ordering, read in this exact sequence:
      *   1. take the charge value (live while held, or the stashed release
-     *      level for the one sample after the button came up),
+     *      level while inside the release grace window),
      *   2. take and clear the shoot latch,
-     *   3. clear the stashed release level.
+     *   3. if this sample fires a shot, spend the stashed release level.
      * Because step 3 runs after step 1, the sample that reports the shot also
-     * reports the power that was charged for it; the sample after that reads 0.
+     * reports the power that was charged for it, and one charge can never
+     * power two shots. Without a click the stash is left for the auto-swing,
+     * and simply expires at the end of the grace window.
      */
     const charge = currentCharge();
     const shoot = shootLatched;
     shootLatched = false;
-    releasedCharge = 0;
+    if (shoot) releasedCharge = 0;
 
     return { seq, moveX, moveZ, aimX, aimZ, shoot, charge };
   }

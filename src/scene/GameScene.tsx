@@ -315,6 +315,9 @@ export function GameScene({ engine, input, side }: Props) {
         engine.role === 'spectator' ? snapshot.players[side].aim : input.getAim();
       const target = clampAim(raw.x, raw.z, side);
       aim.current.position.set(target.x, 0.02, target.z);
+      // Grow the ring with charge, so power reads right where you are looking.
+      const charge = engine.role === 'spectator' ? 0 : input.getCharge();
+      aim.current.scale.setScalar(1 + 0.6 * charge);
       // Hide it when there is no shot to aim: between points and once the
       // match is decided.
       const live =

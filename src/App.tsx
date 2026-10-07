@@ -88,6 +88,9 @@ export default function App() {
   /** Held so a rematch can clear the AI's carried-over state. */
   const aiRef = useRef<ReturnType<typeof createAi> | null>(null);
 
+  /** Stable reader for the HUD's power meter; follows the current controller. */
+  const readCharge = useCallback(() => inputRef.current?.getCharge() ?? 0, []);
+
   /** Set when the page was opened from an invite link. */
   const [joiningCode, setJoiningCode] = useState<string | null>(null);
   /** Bumped to force the Canvas to remount cleanly between matches. */
@@ -530,7 +533,7 @@ export default function App() {
         </Canvas>
       )}
 
-      {screen === 'playing' && <Hud />}
+      {screen === 'playing' && <Hud getCharge={readCharge} />}
       {screen === 'menu' && (
         <MenuScreen
           onPlayAi={startAiMatch}
