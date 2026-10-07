@@ -76,6 +76,12 @@ export const PLAYER = {
    */
   netReach: 1.0,
   /**
+   * How far behind the baseline the server starts each point. Until the serve
+   * is struck the server may not step over the baseline (a foot fault in real
+   * tennis), so they start just behind it with room to shuffle sideways.
+   */
+  serveStandBack: 0.5,
+  /**
    * Highest ball the automatic swing will take by itself. Above this the
    * player must click to volley, which keeps the auto-swing helpful without
    * letting two players trade the ball in mid-air indefinitely.

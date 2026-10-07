@@ -1,5 +1,5 @@
 /** Headless sanity checks for the tennis simulation. */
-import { createInitialSnapshot, step, resetMatch } from '../src/game/simulation';
+import { createInitialSnapshot, step, resetMatch, predictPlayer } from '../src/game/simulation';
 import { EMPTY_INPUT } from '../src/game/types';
 import type { GameSnapshot, PlayerInput, GameEvent } from '../src/game/types';
 import { COURT, MATCH } from '../src/game/constants';
@@ -466,6 +466,29 @@ const inp = (o: Partial<PlayerInput> = {}): PlayerInput => ({ ...EMPTY_INPUT, ..
   const c = JSON.parse(JSON.stringify(createInitialSnapshot())) as GameSnapshot;
   for (let i = 0; i < 1500; i++) step(c, inputsFor(i));
   check('replay from a serialised snapshot matches', JSON.stringify(c) === JSON.stringify(a), 'replayed run diverged');
+}
+
+// --- 25. The server may not cross the baseline until the serve is struck ---
+// A foot fault in real tennis. Side 0 serves first and defends -z, so moving
+// toward the net is +z. The receiver is free to move, and the server is free
+// again once the ball is in play.
+{
+  const s = createInitialSnapshot();
+  check('server starts behind the baseline', s.players[0].position.z <= -COURT.halfLength, `z=${s.players[0].position.z.toFixed(2)}`);
+  for (let i = 0; i < 120; i++) step(s, [inp({ moveZ: 1, moveX: 0.5 }), inp({ moveZ: -1 })]);
+  check('server held at the baseline while serving', s.players[0].position.z <= -COURT.halfLength + 1e-9, `z=${s.players[0].position.z.toFixed(2)}`);
+  check('server can still move sideways', s.players[0].position.x > 1, `x=${s.players[0].position.x.toFixed(2)}`);
+  check('receiver is not held back', s.players[1].position.z < COURT.halfLength - 2, `z=${s.players[1].position.z.toFixed(2)}`);
+
+  // The guest predicts the same rule, or its server would walk in and snap back.
+  const g = createInitialSnapshot();
+  for (let i = 0; i < 120; i++) predictPlayer(g, 0, inp({ moveZ: 1 }));
+  check('prediction holds the server at the baseline', g.players[0].position.z <= -COURT.halfLength + 1e-9, `z=${g.players[0].position.z.toFixed(2)}`);
+
+  step(s, [inp({ shoot: true, aimX: 0, aimZ: 6 }), inp()]);
+  check('serve struck -> rally', s.match.phase === 'rally', `phase=${s.match.phase}`);
+  for (let i = 0; i < 30; i++) step(s, [inp({ moveZ: 1 }), inp()]);
+  check('server free to come in after the serve', s.players[0].position.z > -COURT.halfLength + 1, `z=${s.players[0].position.z.toFixed(2)}`);
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);

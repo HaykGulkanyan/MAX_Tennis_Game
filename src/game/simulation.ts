@@ -25,13 +25,21 @@ const attackDir = (side: PlayerSide): number => (side === 0 ? 1 : -1);
 /** Sign of the half-court this side defends. */
 const defendDir = (side: PlayerSide): number => (side === 0 ? -1 : 1);
 
-function spawnPosition(side: PlayerSide): Vec3 {
-  return vec(0, 0, defendDir(side) * (COURT.halfLength - 1.4));
+/**
+ * Where a player stands at the start of a point. The receiver waits just
+ * inside the baseline; the server starts behind it, since they may not cross
+ * it until the serve is struck (see `keepServerBehindBaseline`).
+ */
+function spawnPosition(side: PlayerSide, serving: boolean): Vec3 {
+  const depth = serving
+    ? COURT.halfLength + PLAYER.serveStandBack
+    : COURT.halfLength - 1.4;
+  return vec(0, 0, defendDir(side) * depth);
 }
 
-function makePlayer(side: PlayerSide): PlayerState {
+function makePlayer(side: PlayerSide, serving: boolean): PlayerState {
   return {
-    position: spawnPosition(side),
+    position: spawnPosition(side, serving),
     velocity: vec(),
     swingCooldown: 0,
     swingTimer: 0,
@@ -43,7 +51,8 @@ function makePlayer(side: PlayerSide): PlayerState {
 export function createInitialSnapshot(): GameSnapshot {
   const snapshot: GameSnapshot = {
     tick: 0,
-    players: [makePlayer(0), makePlayer(1)],
+    // Side 0 serves first.
+    players: [makePlayer(0, true), makePlayer(1, false)],
     ball: {
       position: vec(),
       velocity: vec(),
@@ -88,8 +97,9 @@ function placeBallForServe(snapshot: GameSnapshot): void {
 
 /** Reset both players and the ball for a fresh point, keeping the score. */
 function resetForNextPoint(snapshot: GameSnapshot): void {
-  snapshot.players[0].position = spawnPosition(0);
-  snapshot.players[1].position = spawnPosition(1);
+  const server = snapshot.match.server;
+  snapshot.players[0].position = spawnPosition(0, server === 0);
+  snapshot.players[1].position = spawnPosition(1, server === 1);
   snapshot.players[0].velocity = vec();
   snapshot.players[1].velocity = vec();
   snapshot.players[0].swingCooldown = 0;
@@ -159,6 +169,25 @@ function clampToOwnHalf(position: Vec3, side: PlayerSide): void {
     position.z = Math.max(-maxZ, Math.min(-PLAYER.netKeepout, position.z));
   } else {
     position.z = Math.max(PLAYER.netKeepout, Math.min(maxZ, position.z));
+  }
+}
+
+/**
+ * The serving rule: until the serve is struck, the server may not step over
+ * their baseline into the court (a foot fault in real tennis). They can still
+ * move sideways and further back. Applied in both `step` and `predictPlayer`,
+ * or a guest's predicted server would walk in and then snap back.
+ */
+function keepServerBehindBaseline(snapshot: GameSnapshot, side: PlayerSide): void {
+  if (snapshot.match.phase !== 'serving' || snapshot.match.server !== side) return;
+  const player = snapshot.players[side];
+  // Distance from the net toward this player's own end; must stay >= baseline.
+  const depth = defendDir(side) * player.position.z;
+  if (depth < COURT.halfLength) {
+    player.position.z = defendDir(side) * COURT.halfLength;
+    // Kill the velocity into the line, so they do not keep pushing against it
+    // and lurch forward the instant the serve is hit.
+    if (defendDir(side) * player.velocity.z < 0) player.velocity.z = 0;
   }
 }
 
@@ -518,6 +547,8 @@ export function step(
 
   stepPlayer(snapshot.players[0], inputs[0], 0, dt);
   stepPlayer(snapshot.players[1], inputs[1], 1, dt);
+  keepServerBehindBaseline(snapshot, 0);
+  keepServerBehindBaseline(snapshot, 1);
 
   if (match.phase === 'point-over') {
     match.resetTimer -= dt;
@@ -599,4 +630,5 @@ export function predictPlayer(
 ): void {
   if (snapshot.paused) return;
   stepPlayer(snapshot.players[side], input, side, dt);
+  keepServerBehindBaseline(snapshot, side);
 }
