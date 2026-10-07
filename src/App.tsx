@@ -159,6 +159,10 @@ export default function App() {
         switch (event.type) {
           case 'hit':
             playHit(event.power);
+            // Our own hit spends the charge, so holding right click all match
+            // cannot power every shot. On a guest this arrives one network
+            // delay after the hit, well before the next ball comes back.
+            if (event.side === mySide) inputRef.current?.spendCharge();
             break;
           case 'bounce':
             playBounce();

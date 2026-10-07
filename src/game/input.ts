@@ -38,6 +38,12 @@ export type InputController = {
   getCharge(): number;
   /** True while right mouse is held. */
   isCharging(): boolean;
+  /**
+   * Use up the charge because this player just hit the ball. A held button
+   * stops charging until it is released and pressed again, so every powered
+   * shot needs its own charge.
+   */
+  spendCharge(): void;
   attach(target: HTMLElement | Window): void;
   detach(): void;
 };
@@ -358,6 +364,17 @@ export function createInputController(): InputController {
     getAim: () => ({ x: aimX, z: aimZ }),
     getCharge: currentCharge,
     isCharging: () => charging,
+    spendCharge(): void {
+      /*
+       * Without this, holding right mouse for the whole match gave every shot
+       * full power for free. Clearing `charging` (rather than restarting the
+       * ramp) means the next charge needs a fresh press; the mouseup of the
+       * press just spent is ignored because it no longer finds a charge.
+       */
+      charging = false;
+      chargeStart = 0;
+      releasedCharge = 0;
+    },
     attach,
     detach,
   };
