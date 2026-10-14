@@ -1,6 +1,7 @@
 /**
- * Static court scenery: surface, painted lines, net, surrounding stadium shell
- * and the lights that everything else in the scene is lit by.
+ * Static court scenery: surface, painted lines, net, the courtside boards and
+ * the lights that everything else in the scene is lit by. The stands, crowd and
+ * floodlights beyond the boards live in `Stadium.tsx`.
  *
  * Purely presentational. No state, no store access, no props, so React never
  * re-renders it after mount and three.js can treat every mesh here as static.
@@ -21,6 +22,7 @@ import type React from 'react'
 import type * as THREE from 'three'
 
 import { COURT } from '../game/constants'
+import { Stadium } from './Stadium'
 
 /* ------------------------------------------------------------------ *
  * Derived geometry
@@ -59,11 +61,23 @@ const NET_MESH_HEIGHT = COURT.netHeight - NET_BAND_HEIGHT
 /** Net spans post to post, a little wider than the court itself. */
 const NET_HALF_WIDTH = POST_X
 
-/** The surrounding stand sits just beyond the runoff. */
+/**
+ * Advertising boards just beyond the runoff. They used to be 2.6m walls, which
+ * hid everything behind them; at board height the stands show over the top.
+ */
 const WALL_HALF_X = FIELD_HALF_X + 1.6
-const WALL_HALF_Z = FIELD_HALF_Z + 1.6
-const WALL_HEIGHT = 2.6
-const WALL_THICKNESS = 0.5
+/*
+ * The end boards stand well back, as at a real stadium. They have to: the
+ * third-person camera trails 6.2m behind a player, and a player can retreat to
+ * the very back of the runoff (z = 15.3), which puts the camera at z = 21.5.
+ * Boards any closer put the camera behind them, and they then cover the bottom
+ * of the screen and hide the player's feet.
+ */
+const WALL_HALF_Z = FIELD_HALF_Z + 7.0
+const WALL_HEIGHT = 1.1
+const WALL_THICKNESS = 0.3
+/** Coloured stripe along the inner face of the boards. */
+const BOARD_STRIPE_HEIGHT = 0.32
 
 /**
  * Directional light shadow bounds. An orthographic shadow camera spreads its
@@ -102,6 +116,7 @@ const COLORS = {
   post: '#3e4a56',
   wall: '#1f3446',
   wallCap: '#2c4a63',
+  boardStripe: '#c8f24a',
 } as const
 
 /**
@@ -379,32 +394,53 @@ export function Court(): React.ReactElement {
       </mesh>
 
       {/*
-        Four low walls forming the stand. Boxes rather than a hollow extrusion:
-        the inner faces are all the camera ever sees, and four boxes is cheaper
-        than any lathe or shape geometry would be.
+        Four advertising boards around the runoff. Boxes rather than a hollow
+        extrusion: the inner faces are all the camera ever sees, and four boxes
+        are cheaper than any lathe or shape geometry would be. Each carries a
+        bright stripe on its inner face, the way courtside boards do.
       */}
       {[
-        // [x, z, sizeX, sizeZ]
-        [0, -WALL_HALF_Z, WALL_HALF_X * 2, WALL_THICKNESS],
-        [0, WALL_HALF_Z, WALL_HALF_X * 2, WALL_THICKNESS],
-        [-WALL_HALF_X, 0, WALL_THICKNESS, WALL_HALF_Z * 2],
-        [WALL_HALF_X, 0, WALL_THICKNESS, WALL_HALF_Z * 2],
-      ].map(([x, z, sx, sz], index) => (
-        <mesh
-          key={index}
-          position={[x, WALL_HEIGHT / 2, z]}
-          castShadow
-          receiveShadow
-          ref={freezeTransform}
-        >
-          <boxGeometry args={[sx, WALL_HEIGHT, sz]} />
-          <meshStandardMaterial
-            color={index < 2 ? COLORS.wall : COLORS.wallCap}
-            roughness={0.9}
-            metalness={0}
-          />
-        </mesh>
+        // [x, z, sizeX, sizeZ, inward normal X, inward normal Z]
+        [0, -WALL_HALF_Z, WALL_HALF_X * 2, WALL_THICKNESS, 0, 1],
+        [0, WALL_HALF_Z, WALL_HALF_X * 2, WALL_THICKNESS, 0, -1],
+        [-WALL_HALF_X, 0, WALL_THICKNESS, WALL_HALF_Z * 2, 1, 0],
+        [WALL_HALF_X, 0, WALL_THICKNESS, WALL_HALF_Z * 2, -1, 0],
+      ].map(([x, z, sx, sz, nx, nz], index) => (
+        <group key={index}>
+          <mesh
+            position={[x, WALL_HEIGHT / 2, z]}
+            castShadow
+            receiveShadow
+            ref={freezeTransform}
+          >
+            <boxGeometry args={[sx, WALL_HEIGHT, sz]} />
+            <meshStandardMaterial
+              color={index < 2 ? COLORS.wall : COLORS.wallCap}
+              roughness={0.9}
+              metalness={0}
+            />
+          </mesh>
+          <mesh
+            position={[
+              x + nx * (WALL_THICKNESS / 2 + 0.01),
+              WALL_HEIGHT * 0.55,
+              z + nz * (WALL_THICKNESS / 2 + 0.01),
+            ]}
+            ref={freezeTransform}
+          >
+            <boxGeometry
+              args={[
+                nx === 0 ? sx - 0.4 : 0.02,
+                BOARD_STRIPE_HEIGHT,
+                nz === 0 ? sz - 0.4 : 0.02,
+              ]}
+            />
+            <meshStandardMaterial color={COLORS.boardStripe} roughness={0.6} metalness={0} />
+          </mesh>
+        </group>
       ))}
+
+      <Stadium wallHalfX={WALL_HALF_X} wallHalfZ={WALL_HALF_Z} />
     </group>
   )
 }

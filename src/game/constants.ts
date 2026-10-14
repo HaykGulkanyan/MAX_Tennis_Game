@@ -127,7 +127,7 @@ export const SHOT = {
 
 export const MATCH = {
   /** First to this many points wins, but must win by 2. */
-  pointsToWin: 11,
+  pointsToWin: 10,
   /** Seconds between a point ending and the next serve. */
   pointResetDelay: 1.6,
 } as const;

@@ -18,7 +18,7 @@ Where you point the marker is where the ball is headed, so aiming matters as muc
 as timing. If you do not click in time, an auto-swing covers you, though a
 deliberate shot gives you far more control.
 
-First to 11 points wins, and you have to win by 2.
+First to 10 points wins, and you have to win by 2.
 
 ## Playing with a friend
 
