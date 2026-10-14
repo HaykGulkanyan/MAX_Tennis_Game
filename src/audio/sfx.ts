@@ -259,6 +259,50 @@ export function playUiClick(): void {
   });
 }
 
+/**
+ * Crowd roar after a point. `intensity` is 0..1.5; a match win is the top end.
+ *
+ * Two layers of band-passed noise: a low rumble (the mass of voices) and a
+ * brighter mid band (individual shouts). Unlike the percussive cues it swells
+ * in over a quarter second and dies away slowly, which is what makes noise
+ * read as a crowd rather than as static.
+ */
+export function playCrowdCheer(intensity: number): void {
+  play((c, out, t) => {
+    const level = 0.25 + Math.min(1.5, Math.max(0, intensity)) * 0.3;
+    const swell = 0.25;
+    const duration = 1.6 + intensity * 1.2;
+    const sources: AudioScheduledSourceNode[] = [];
+
+    for (const layer of [
+      { hz: 520, q: 0.7, gain: 1 },
+      { hz: 1700, q: 1.1, gain: 0.45 },
+    ]) {
+      const noise = c.createBufferSource();
+      noise.buffer = noiseBuffer;
+      noise.loop = true;
+      noise.loopEnd = noiseBuffer ? noiseBuffer.duration : 1;
+
+      const band = c.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = layer.hz;
+      band.Q.value = layer.q;
+
+      const gain = c.createGain();
+      const peak = Math.max(0.0002, level * layer.gain);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + swell);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+      gain.gain.setValueAtTime(0, t + duration);
+
+      noise.connect(band).connect(gain).connect(out);
+      sources.push(noise);
+    }
+
+    return { sources, stopAt: t + duration };
+  });
+}
+
 // --- Internals -------------------------------------------------------------
 
 /** What a voice builder hands back so the scheduler can stop and clean it up. */

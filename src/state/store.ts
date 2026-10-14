@@ -38,6 +38,8 @@ export type StoreState = {
   difficulty: Difficulty;
   /** View preference, local to this client only. */
   cameraMode: CameraMode;
+  /** Whether the chair umpire calls the score. Remembered between visits. */
+  umpireVoice: boolean;
 
   /** This client's own profile, and which side it controls. */
   profile: PlayerProfile;
@@ -68,6 +70,7 @@ export type StoreState = {
   setDifficulty: (difficulty: Difficulty) => void;
   setCameraMode: (cameraMode: CameraMode) => void;
   cycleCameraMode: () => void;
+  setUmpireVoice: (on: boolean) => void;
   setProfile: (profile: Partial<PlayerProfile>) => void;
   setProfiles: (profiles: [PlayerProfile, PlayerProfile]) => void;
   setSide: (side: PlayerSide) => void;
@@ -91,11 +94,23 @@ const defaultProfile = (): PlayerProfile => ({
   color: SHIRT_COLORS[0],
 });
 
+const UMPIRE_VOICE_KEY = 'maxtennis.umpireVoice';
+
+/** Storage can be blocked (private mode, sandboxed frames); default to on. */
+function loadUmpireVoice(): boolean {
+  try {
+    return window.localStorage.getItem(UMPIRE_VOICE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
 const initial = {
   screen: 'menu' as UiScreen,
   mode: 'menu' as GameMode,
   difficulty: 'medium' as Difficulty,
   cameraMode: 'broadcast' as CameraMode,
+  umpireVoice: typeof window === 'undefined' ? true : loadUmpireVoice(),
   profile: defaultProfile(),
   side: 0 as PlayerSide,
   profiles: [defaultProfile(), defaultProfile()] as [PlayerProfile, PlayerProfile],
@@ -123,6 +138,14 @@ export const useStore = create<StoreState>((set) => ({
       const next = order[(order.indexOf(s.cameraMode) + 1) % order.length];
       return { cameraMode: next };
     }),
+  setUmpireVoice: (umpireVoice) => {
+    try {
+      window.localStorage.setItem(UMPIRE_VOICE_KEY, umpireVoice ? 'on' : 'off');
+    } catch {
+      // Not remembered, but still applies for this visit.
+    }
+    set({ umpireVoice });
+  },
   setProfile: (profile) =>
     set((s) => ({ profile: { ...s.profile, ...profile } })),
   setProfiles: (profiles) => set({ profiles }),
@@ -146,5 +169,7 @@ export const useStore = create<StoreState>((set) => ({
       }
       return { scores: [scores[0], scores[1]], phase, server, winner };
     }),
-  reset: () => set({ ...initial, profile: defaultProfile() }),
+  // Keep the voice preference: leaving a match is not a reason to forget it.
+  reset: () =>
+    set((s) => ({ ...initial, profile: defaultProfile(), umpireVoice: s.umpireVoice })),
 }));

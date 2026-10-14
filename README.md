@@ -13,6 +13,8 @@ Vite and TypeScript.
 | Mouse | Aims the target marker on the court |
 | Left click | Hit the ball |
 | Hold right click | Charge power |
+| `C` | Switch camera view |
+| `V` | Turn the umpire's score calls on or off |
 
 Where you point the marker is where the ball is headed, so aiming matters as much
 as timing. If you do not click in time, an auto-swing covers you, though a

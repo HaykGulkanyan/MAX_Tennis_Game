@@ -1,9 +1,9 @@
 /**
- * The stadium around the court: tiered stands on all four sides, a crowd,
- * floodlight towers and an umpire's chair.
+ * The stadium around the court: tiered stands on all four sides, an animated
+ * crowd that cheers on every point, floodlight towers and an umpire's chair.
  *
- * Purely decorative and fully static, like the court itself. Nothing here
- * takes part in the simulation; the ball never collides with any of it.
+ * Purely decorative. Nothing here takes part in the simulation; the ball never
+ * collides with any of it. Only the crowd moves, driven by `crowdMood.ts`.
  *
  * Two constraints shaped the layout:
  *
@@ -13,16 +13,19 @@
  *    very back of the runoff. The end boards (and so the end stands behind
  *    them) are placed beyond that point by `Court.tsx`, so that camera never
  *    ends up behind the boards or inside the seating.
- *  - Cost. ~1,500 spectators would be ~3,000 meshes drawn one by one. They are
- *    two InstancedMeshes instead (bodies and heads), so the whole crowd is two
- *    draw calls.
+ *  - Cost. ~1,500 spectators would be ~6,000 meshes drawn one by one. They are
+ *    three InstancedMeshes instead (bodies, heads, arms), so the whole crowd is
+ *    three draw calls.
  */
 
 /// <reference types="@react-three/fiber" />
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type React from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+
+import { sampleExcitement } from './crowdMood'
 
 import { COURT } from '../game/constants'
 
@@ -98,8 +101,12 @@ type Step = {
   color: string
 }
 
-/** A spectator's seat: where they sit, and along which axis the row runs. */
-type Seat = { x: number; y: number; z: number }
+/**
+ * A spectator's seat: where they sit, and along which axis their row runs.
+ * The row axis is the spectator's left-right, which is the way their arms
+ * spread when they cheer.
+ */
+type Seat = { x: number; y: number; z: number; along: 'x' | 'z' }
 
 /**
  * Build the stepped stands and the seats on them.
@@ -128,7 +135,7 @@ function buildStands(wallHalfX: number, wallHalfZ: number) {
         color,
       })
       for (let z = -endStart + SEAT_PITCH / 2; z < endStart; z += SEAT_PITCH) {
-        seats.push({ x: sign * (sideStart + mid + 0.1), y: top, z })
+        seats.push({ x: sign * (sideStart + mid + 0.1), y: top, z, along: 'z' })
       }
     }
 
@@ -141,7 +148,7 @@ function buildStands(wallHalfX: number, wallHalfZ: number) {
         color,
       })
       for (let x = -halfWidth + SEAT_PITCH / 2; x < halfWidth; x += SEAT_PITCH) {
-        seats.push({ x, y: top, z: sign * (endStart + mid + 0.1) })
+        seats.push({ x, y: top, z: sign * (endStart + mid + 0.1), along: 'x' })
       }
     }
   }
@@ -159,10 +166,41 @@ function buildStands(wallHalfX: number, wallHalfZ: number) {
 const BODY_RADIUS = 0.22
 const BODY_LENGTH = 0.42
 const HEAD_RADIUS = 0.15
+const BODY_HALF = BODY_RADIUS + BODY_LENGTH / 2
+/** Arms: thin capsules, raised in a V when cheering. */
+const ARM_RADIUS = 0.05
+const ARM_LENGTH = 0.38
+/** How far out from vertical the raised arms lean. */
+const ARM_SPREAD = 0.45
+/** Shoulder offset from the body's centre line, along the row. */
+const SHOULDER_OFFSET = 0.13
+/**
+ * How far below "raised" a lowered arm sits. Far enough that the whole arm is
+ * hidden inside the body, so a calm crowd shows no extra geometry.
+ */
+const ARM_TUCK = 0.5
 
+/** Gentle idle sway, always running, so the stands never look frozen. */
+const IDLE_BOB = 0.025
+/** Height of a cheering jump at full excitement. */
+const JUMP_HEIGHT = 0.3
+
+/** Index of the Y translation inside a column-major 4x4 matrix. */
+const TY = 13
+
+/**
+ * The crowd.
+ *
+ * Animation writes only the Y translation of each instance straight into the
+ * instance matrix buffer: every spectator keeps their place, scale and arm
+ * angle, and only bobs, jumps and raises their arms. That is a couple of float
+ * writes per person per frame instead of rebuilding ~6,000 matrices, so the
+ * animated crowd costs about what the static one did.
+ */
 function Crowd({ seats }: { seats: Seat[] }): React.ReactElement {
   const bodies = useRef<THREE.InstancedMesh>(null)
   const heads = useRef<THREE.InstancedMesh>(null)
+  const arms = useRef<THREE.InstancedMesh>(null)
 
   // Decide who is in which seat once, from the fixed seed.
   const people = useMemo(() => {
@@ -177,39 +215,119 @@ function Crowd({ seats }: { seats: Seat[] }): React.ReactElement {
         scale: 0.9 + random() * 0.2,
         shirt: COLORS.shirts[Math.floor(random() * COLORS.shirts.length)],
         skin: COLORS.skin[Math.floor(random() * COLORS.skin.length)],
+        // Each fan bounces at their own pace and phase, and some are more into
+        // it than others, so a cheer ripples instead of moving in lockstep.
+        phase: random() * Math.PI * 2,
+        pace: 7 + random() * 4,
+        enthusiasm: 0.35 + random() * 0.65,
       }))
   }, [seats])
+
+  /** Rest heights, so each frame can write absolute positions. */
+  const rest = useMemo(() => {
+    const body = new Float32Array(people.length)
+    const head = new Float32Array(people.length)
+    const arm = new Float32Array(people.length)
+    people.forEach((person, i) => {
+      const s = person.scale
+      body[i] = person.y + BODY_HALF * s
+      head[i] = person.y + (BODY_HALF * 2 + HEAD_RADIUS * 0.8) * s
+      // Centre of a raised arm, just above the shoulder.
+      arm[i] = person.y + (BODY_HALF * 2 - 0.08) * s + (ARM_LENGTH / 2) * s
+    })
+    return { body, head, arm }
+  }, [people])
 
   useLayoutEffect(() => {
     const body = bodies.current
     const head = heads.current
-    if (!body || !head) return
+    const arm = arms.current
+    if (!body || !head || !arm) return
 
     const matrix = new THREE.Matrix4()
+    const rotation = new THREE.Matrix4()
     const color = new THREE.Color()
-    const bodyHalf = BODY_RADIUS + BODY_LENGTH / 2
 
     people.forEach((person, i) => {
       const x = person.x + person.jitterX
       const z = person.z + person.jitterZ
       const s = person.scale
 
-      matrix.makeScale(s, s, s).setPosition(x, person.y + bodyHalf * s, z)
+      matrix.makeScale(s, s, s).setPosition(x, rest.body[i], z)
       body.setMatrixAt(i, matrix)
       body.setColorAt(i, color.set(person.shirt))
 
-      matrix
-        .makeScale(s, s, s)
-        .setPosition(x, person.y + (bodyHalf * 2 + HEAD_RADIUS * 0.8) * s, z)
+      matrix.makeScale(s, s, s).setPosition(x, rest.head[i], z)
       head.setMatrixAt(i, matrix)
       head.setColorAt(i, color.set(person.skin))
+
+      // Two arms, leaning outward along the row in a V, starting tucked away.
+      for (const side of [-1, 1]) {
+        const lean = side * ARM_SPREAD
+        if (person.along === 'x') rotation.makeRotationZ(-lean)
+        else rotation.makeRotationX(lean)
+        matrix.makeScale(s, s, s).premultiply(rotation)
+        const offset = side * SHOULDER_OFFSET * s
+        matrix.setPosition(
+          x + (person.along === 'x' ? offset : 0),
+          rest.arm[i] - ARM_TUCK * s,
+          z + (person.along === 'z' ? offset : 0),
+        )
+        const index = i * 2 + (side < 0 ? 0 : 1)
+        arm.setMatrixAt(index, matrix)
+        arm.setColorAt(index, color.set(person.skin))
+      }
     })
 
-    for (const mesh of [body, head]) {
+    for (const mesh of [body, head, arm]) {
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     }
-  }, [people])
+  }, [people, rest])
+
+  /** Whether the arms were left raised last frame, so calm frames can skip them. */
+  const armsUp = useRef(false)
+
+  useFrame((state, delta) => {
+    const body = bodies.current
+    const head = heads.current
+    const arm = arms.current
+    if (!body || !head || !arm) return
+
+    const t = state.clock.elapsedTime
+    const mood = sampleExcitement(delta)
+    const bodyM = body.instanceMatrix.array as Float32Array
+    const headM = head.instanceMatrix.array as Float32Array
+    const armM = arm.instanceMatrix.array as Float32Array
+    const moveArms = mood > 0 || armsUp.current
+
+    for (let i = 0; i < people.length; i++) {
+      const person = people[i]
+      const s = person.scale
+      const bob = IDLE_BOB * Math.sin(t * 1.3 + person.phase)
+      // Bounce: only the upward half of the wave, so fans hop rather than sink.
+      const hop = Math.max(0, Math.sin(t * person.pace + person.phase))
+      const jump = mood * person.enthusiasm * JUMP_HEIGHT * hop
+      const lift = bob + jump
+
+      bodyM[i * 16 + TY] = rest.body[i] + lift
+      headM[i * 16 + TY] = rest.head[i] + lift
+
+      if (moveArms) {
+        // 0 = tucked inside the body, 1 = fully raised.
+        const raise = Math.min(1, mood * person.enthusiasm * 2.2)
+        const y = rest.arm[i] - ARM_TUCK * s * (1 - raise) + lift
+        armM[i * 32 + TY] = y
+        armM[i * 32 + 16 + TY] = y
+      }
+    }
+
+    body.instanceMatrix.needsUpdate = true
+    head.instanceMatrix.needsUpdate = true
+    if (moveArms) arm.instanceMatrix.needsUpdate = true
+    armsUp.current = mood > 0
+  })
 
   /*
    * frustumCulled is off because an InstancedMesh is culled by its base
@@ -232,6 +350,14 @@ function Crowd({ seats }: { seats: Seat[] }): React.ReactElement {
         frustumCulled={false}
       >
         <sphereGeometry args={[HEAD_RADIUS, 10, 8]} />
+        <meshStandardMaterial roughness={0.8} metalness={0} />
+      </instancedMesh>
+      <instancedMesh
+        ref={arms}
+        args={[undefined, undefined, people.length * 2]}
+        frustumCulled={false}
+      >
+        <capsuleGeometry args={[ARM_RADIUS, ARM_LENGTH, 2, 6]} />
         <meshStandardMaterial roughness={0.8} metalness={0} />
       </instancedMesh>
     </>

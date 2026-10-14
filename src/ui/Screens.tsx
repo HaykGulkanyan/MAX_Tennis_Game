@@ -638,6 +638,27 @@ function CameraSwitcher(): React.ReactElement {
         </button>
       ))}
       <span className="cam-hint">press C</span>
+      <UmpireToggle />
     </div>
+  );
+}
+
+/** Turns the chair umpire's score calls on or off. Sits with the view controls. */
+function UmpireToggle(): React.ReactElement {
+  const umpireVoice = useStore((s) => s.umpireVoice);
+  const setUmpireVoice = useStore((s) => s.setUmpireVoice);
+  return (
+    <>
+      <span className="cam-divider" aria-hidden="true" />
+      <button
+        type="button"
+        aria-pressed={umpireVoice}
+        className={umpireVoice ? 'cam-btn is-active' : 'cam-btn'}
+        onClick={() => setUmpireVoice(!umpireVoice)}
+        title="Umpire calls the score (V)"
+      >
+        Umpire {umpireVoice ? 'on' : 'off'}
+      </button>
+    </>
   );
 }

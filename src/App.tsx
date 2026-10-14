@@ -33,7 +33,10 @@ import {
   playUiClick,
   playWin,
   playLose,
+  playCrowdCheer,
 } from './audio/sfx';
+import { announceMatch, announceScore, hushUmpire, setUmpireVoice } from './audio/umpire';
+import { cheer, resetCrowd } from './scene/crowdMood';
 import {
   inviteUrlFor,
   joinRoom,
@@ -50,6 +53,11 @@ import type {
   PlayerProfile,
 } from './game/types';
 import { EMPTY_INPUT } from './game/types';
+
+/** The name the umpire uses for a side; falls back when a name was left blank. */
+function calledName(profile: PlayerProfile, side: PlayerSide): string {
+  return profile.name.trim() || (side === 0 ? 'Player one' : 'Player two');
+}
 
 /** Point-ending callouts, shown briefly over the court. */
 const CALLOUTS: Record<string, string> = {
@@ -113,17 +121,22 @@ export default function App() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.code !== 'KeyC' || event.repeat) return;
+      if ((event.code !== 'KeyC' && event.code !== 'KeyV') || event.repeat) return;
       // Ignore it while the player is typing their name.
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
-      useStore.getState().cycleCameraMode();
+      const store = useStore.getState();
+      if (event.code === 'KeyV') store.setUmpireVoice(!store.umpireVoice);
+      else store.cycleCameraMode();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  const umpireVoice = useStore((s) => s.umpireVoice);
+  useEffect(() => setUmpireVoice(umpireVoice), [umpireVoice]);
 
   // An invite link lands here: capture the code and go straight to the name
   // prompt, so joining is one step.
@@ -152,9 +165,23 @@ export default function App() {
    * told its side only after the engine exists, so a captured `side` would be
    * stale and the win and lose sounds would be swapped.
    */
+  /**
+   * Why the current point is ending, so the umpire can open with "Out!" or
+   * "Net!". Set by those events and cleared by the next hit, because the call
+   * only belongs to the point it ended.
+   */
+  const pointReason = useRef<'out' | 'net' | null>(null);
+
   const handleEvents = useCallback(
     (events: GameEvent[]) => {
-      const mySide = useStore.getState().side;
+      const { side: mySide, profiles } = useStore.getState();
+      const names: [string, string] = [
+        calledName(profiles[0], 0),
+        calledName(profiles[1], 1),
+      ];
+      // The final point arrives together with 'match-over'; the umpire calls
+      // the match then, instead of a score nobody will play on from.
+      const matchEnds = events.some((e) => e.type === 'match-over');
       for (const event of events) {
         switch (event.type) {
           case 'hit':
@@ -163,6 +190,7 @@ export default function App() {
             // cannot power every shot. On a guest this arrives one network
             // delay after the hit, well before the next ball comes back.
             if (event.side === mySide) inputRef.current?.spendCharge();
+            pointReason.current = null;
             break;
           case 'bounce':
             playBounce();
@@ -170,16 +198,27 @@ export default function App() {
           case 'net':
             playNet();
             showCallout(CALLOUTS.net);
+            pointReason.current = 'net';
             break;
           case 'out':
             showCallout(CALLOUTS.out);
+            pointReason.current = 'out';
             break;
           case 'score':
             playScore();
+            if (!matchEnds) {
+              cheer(1);
+              playCrowdCheer(1);
+              announceScore(event.scores, names, pointReason.current);
+            }
+            pointReason.current = null;
             break;
           case 'match-over':
             if (event.winner === mySide) playWin();
             else playLose();
+            cheer(1.5);
+            playCrowdCheer(1.5);
+            announceMatch(names[event.winner]);
             break;
         }
       }
@@ -481,6 +520,9 @@ export default function App() {
   const exitToMenu = useCallback(() => {
     playUiClick();
     teardown();
+    // Do not let a cheer or a call carry over into the menu.
+    resetCrowd();
+    hushUmpire();
     useStore.getState().reset();
   }, [teardown]);
 

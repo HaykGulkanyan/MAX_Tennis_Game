@@ -824,6 +824,14 @@ kbd {
   white-space: nowrap;
 }
 
+/* Separates the umpire toggle from the camera choices. */
+.cam-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
 @media (max-width: 560px) {
   .cam-hint {
     display: none;
@@ -838,11 +846,11 @@ kbd {
  * compete with the court, bright while charging, accent at full.
  * ---------------------------------------------------------------- */
 
+/* Bottom-right, so it never collides with the view controls bottom-left. */
 .power-meter {
   position: absolute;
-  left: 50%;
+  right: clamp(8px, 2vw, 18px);
   bottom: clamp(8px, 2vw, 18px);
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -896,14 +904,17 @@ kbd {
   color: var(--text-faint);
 }
 
-/* On narrow screens the camera switcher owns the bottom-left corner. */
-@media (max-width: 720px) {
-  .power-meter {
-    left: auto;
-    right: clamp(8px, 2vw, 18px);
-    transform: none;
-  }
-  .power-hint {
+/* Narrower screens: drop the hints so both panels still fit on one line. */
+@media (max-width: 960px) {
+  .power-hint,
+  .cam-hint {
     display: none;
+  }
+}
+
+/* Too narrow for both side by side: lift the meter above the view controls. */
+@media (max-width: 640px) {
+  .power-meter {
+    bottom: calc(clamp(8px, 2vw, 18px) + 48px);
   }
 }
