@@ -24,10 +24,13 @@ import type {
   RallyPhase,
 } from '../game/types';
 import { SHIRT_COLORS } from '../game/constants';
+import { DEFAULT_AVATAR, sanitizeProfile } from '../game/avatar';
+import type { Avatar } from '../game/avatar';
 
 export type UiScreen =
   | 'menu'
   | 'profile'
+  | 'customize'
   | 'lobby'
   | 'playing'
   | 'match-over';
@@ -71,7 +74,10 @@ export type StoreState = {
   setCameraMode: (cameraMode: CameraMode) => void;
   cycleCameraMode: () => void;
   setUmpireVoice: (on: boolean) => void;
+  /** Update this client's profile; it is remembered between visits. */
   setProfile: (profile: Partial<PlayerProfile>) => void;
+  /** Change part of this client's look. */
+  setAvatar: (avatar: Partial<Avatar>) => void;
   setProfiles: (profiles: [PlayerProfile, PlayerProfile]) => void;
   setSide: (side: PlayerSide) => void;
   setConnection: (connection: ConnectionStatus) => void;
@@ -89,10 +95,27 @@ export type StoreState = {
   reset: () => void;
 };
 
-const defaultProfile = (): PlayerProfile => ({
-  name: '',
-  color: SHIRT_COLORS[0],
-});
+const PROFILE_KEY = 'maxtennis.profile';
+
+/** A fresh profile: the saved one if there is one, otherwise the defaults. */
+const defaultProfile = (): PlayerProfile => {
+  try {
+    const saved = window.localStorage.getItem(PROFILE_KEY);
+    // Saved data is treated like network data: checked, never trusted.
+    if (saved) return sanitizeProfile(JSON.parse(saved));
+  } catch {
+    // Unreadable or blocked storage: fall through to the defaults.
+  }
+  return { name: '', color: SHIRT_COLORS[0], avatar: { ...DEFAULT_AVATAR } };
+};
+
+function saveProfile(profile: PlayerProfile): void {
+  try {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // Not remembered, but still applies for this visit.
+  }
+}
 
 const UMPIRE_VOICE_KEY = 'maxtennis.umpireVoice';
 
@@ -147,7 +170,17 @@ export const useStore = create<StoreState>((set) => ({
     set({ umpireVoice });
   },
   setProfile: (profile) =>
-    set((s) => ({ profile: { ...s.profile, ...profile } })),
+    set((s) => {
+      const next = { ...s.profile, ...profile };
+      saveProfile(next);
+      return { profile: next };
+    }),
+  setAvatar: (avatar) =>
+    set((s) => {
+      const next = { ...s.profile, avatar: { ...s.profile.avatar, ...avatar } };
+      saveProfile(next);
+      return { profile: next };
+    }),
   setProfiles: (profiles) => set({ profiles }),
   setSide: (side) => set({ side }),
   setConnection: (connection) => set({ connection }),

@@ -37,6 +37,7 @@ import {
 } from './audio/sfx';
 import { announceMatch, announceScore, hushUmpire, setUmpireVoice } from './audio/umpire';
 import { cheer, resetCrowd } from './scene/crowdMood';
+import { COMPUTER_AVATAR, WALL_AVATAR, sanitizeProfile } from './game/avatar';
 import {
   inviteUrlFor,
   joinRoom,
@@ -45,6 +46,8 @@ import {
 } from './net/peer';
 import type { GuestHandle, HostHandle } from './net/peer';
 import { useStore } from './state/store';
+import type { UiScreen } from './state/store';
+import { CustomizeScreen } from './ui/CustomizeScreen';
 import type {
   GameEvent,
   GameSnapshot,
@@ -98,6 +101,14 @@ export default function App() {
 
   /** Stable reader for the HUD's power meter; follows the current controller. */
   const readCharge = useCallback(() => inputRef.current?.getCharge() ?? 0, []);
+
+  /** Where Customize returns to: the menu, or the name screen when joining. */
+  const customizeReturn = useRef<UiScreen>('menu');
+  const openCustomize = useCallback(() => {
+    playUiClick();
+    customizeReturn.current = useStore.getState().screen;
+    setScreen('customize');
+  }, [setScreen]);
 
   /** Set when the page was opened from an invite link. */
   const [joiningCode, setJoiningCode] = useState<string | null>(null);
@@ -291,8 +302,8 @@ export default function App() {
     aiRef.current = ai;
     setSide(0);
     setProfiles([
-      { name: profile.name || 'You', color: profile.color },
-      { name: 'Computer', color: '#e8503a' },
+      { ...profile, name: profile.name || 'You' },
+      { name: 'Computer', color: '#e8503a', avatar: COMPUTER_AVATAR },
     ]);
     buildEngine('authority', 0, (snapshot, s) => ai(snapshot, s));
     setMode('ai');
@@ -304,8 +315,8 @@ export default function App() {
     playUiClick();
     setSide(0);
     setProfiles([
-      { name: profile.name || 'You', color: profile.color },
-      { name: 'Wall', color: '#6b7280' },
+      { ...profile, name: profile.name || 'You' },
+      { name: 'Wall', color: '#6b7280', avatar: WALL_AVATAR },
     ]);
     // Practice has no opponent: the far side never moves or swings, so the
     // player can rally against their own returns and learn the controls.
@@ -335,7 +346,7 @@ export default function App() {
         onPeerJoined: (role, peerProfile) => {
           if (role !== 'player') return;
           const pair: [PlayerProfile, PlayerProfile] = [
-            { name: profile.name || 'Host', color: profile.color },
+            { ...profile, name: profile.name || 'Host' },
             peerProfile,
           ];
           setProfiles(pair);
@@ -454,7 +465,11 @@ export default function App() {
               handleEvents(message.events);
               break;
             case 'profiles':
-              setProfiles(message.profiles);
+              // From the host, so untrusted like any network data.
+              setProfiles([
+                sanitizeProfile(message.profiles?.[0], 'Host'),
+                sanitizeProfile(message.profiles?.[1], 'Player'),
+              ]);
               break;
             case 'start':
               // Also sent on a rematch, so clear the stale winner or the
@@ -583,14 +598,24 @@ export default function App() {
       {screen === 'menu' && (
         <MenuScreen
           onPlayAi={startAiMatch}
+          onCustomize={openCustomize}
           onHost={() => void startHosting()}
           onPractice={startPractice}
+        />
+      )}
+      {screen === 'customize' && (
+        <CustomizeScreen
+          onDone={() => {
+            playUiClick();
+            setScreen(customizeReturn.current);
+          }}
         />
       )}
       {screen === 'profile' && (
         <ProfileScreen
           joiningCode={joiningCode}
           onConfirm={confirmProfile}
+          onCustomize={openCustomize}
           onBack={() => setScreen('menu')}
         />
       )}

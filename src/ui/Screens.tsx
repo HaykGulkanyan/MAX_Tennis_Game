@@ -47,7 +47,7 @@ const inviteUrl = inviteUrlFor;
 
 // --- Shared pieces ------------------------------------------------------
 
-function ScreenShell(props: {
+export function ScreenShell(props: {
   children: React.ReactNode;
   wide?: boolean;
 }): React.ReactElement {
@@ -87,6 +87,7 @@ export function MenuScreen(props: {
   onPlayAi: () => void;
   onHost: () => void;
   onPractice: () => void;
+  onCustomize: () => void;
 }): React.ReactElement {
   const difficulty = useStore((s) => s.difficulty);
   const setDifficulty = useStore((s) => s.setDifficulty);
@@ -142,6 +143,13 @@ export function MenuScreen(props: {
           </button>
           <p className="menu-note">Solo rally against a wall; no score.</p>
         </section>
+
+        <section className="menu-card">
+          <button type="button" className="btn btn-secondary" onClick={props.onCustomize}>
+            Customize
+          </button>
+          <p className="menu-note">Hair, face, shirt, shoes and more.</p>
+        </section>
       </div>
 
       <section className="howto">
@@ -189,6 +197,7 @@ export function ProfileScreen(props: {
   joiningCode: string | null;
   onConfirm: () => void;
   onBack: () => void;
+  onCustomize: () => void;
 }): React.ReactElement {
   const profile = useStore((s) => s.profile);
   const setProfile = useStore((s) => s.setProfile);
@@ -259,6 +268,10 @@ export function ProfileScreen(props: {
             })}
           </div>
         </fieldset>
+
+        <button type="button" className="btn btn-secondary" onClick={props.onCustomize}>
+          Customize your look
+        </button>
 
         <div className="row">
           <button type="button" className="btn btn-ghost" onClick={props.onBack}>

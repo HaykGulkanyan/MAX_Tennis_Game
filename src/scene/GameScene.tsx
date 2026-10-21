@@ -425,8 +425,8 @@ export function GameScene({ engine, input, side }: Props) {
   return (
     <>
       <Court />
-      <Player ref={player0} color={profiles[0].color} side={0} />
-      <Player ref={player1} color={profiles[1].color} side={1} />
+      <Player ref={player0} color={profiles[0].color} avatar={profiles[0].avatar} side={0} />
+      <Player ref={player1} color={profiles[1].color} avatar={profiles[1].avatar} side={1} />
       <Ball ref={ball} />
       <BallShadow ref={ballShadow} />
       <AimMarker ref={aim} />

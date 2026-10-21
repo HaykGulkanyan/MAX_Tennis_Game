@@ -20,27 +20,12 @@ import { forwardRef, useCallback, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { PHYSICS, PLAYER } from '../game/constants';
+import type { Avatar } from '../game/avatar';
 import type { PlayerSide } from '../game/types';
+import { Head, Shoes, TORSO_HEIGHT, Torso } from './AvatarParts';
 
-/** Neutral skin tone for heads; deliberately not tied to the shirt colour. */
-const SKIN_COLOR = '#d9a377';
-/** Racket frame; dark so it reads against both shirt colours and the court. */
-const RACKET_COLOR = '#22262e';
 /** Regulation-ish optic yellow. */
 const BALL_COLOR = '#d8f224';
-
-/**
- * Body proportions derived from the gameplay constants, so the avatar always
- * matches the capsule the simulation actually collides with. PLAYER.height is
- * the full standing height and PLAYER.radius the collision radius.
- */
-const HEAD_RADIUS = PLAYER.radius * 0.52;
-/** Torso occupies everything below the head. */
-const TORSO_HEIGHT = PLAYER.height - HEAD_RADIUS * 2;
-/** Capsule arg is the cylindrical span, excluding the two hemisphere caps. */
-const TORSO_CYLINDER = Math.max(0.05, TORSO_HEIGHT - PLAYER.radius * 2);
-const TORSO_CENTER_Y = PLAYER.radius + TORSO_CYLINDER / 2;
-const HEAD_CENTER_Y = TORSO_HEIGHT + HEAD_RADIUS;
 
 /** Where the racket pivot sits relative to the body: out to the right, chest high. */
 const RACKET_PIVOT: [number, number, number] = [
@@ -54,13 +39,17 @@ const RACKET_HEAD_RADIUS = 0.24;
 type PlayerProps = {
   /** Shirt colour for this player, from SHIRT_COLORS or a profile. */
   color: string;
+  /** Everything else about the look: hair, face, shirt design, shoes... */
+  avatar: Avatar;
   /** 0 defends -Z and so faces +Z; 1 defends +Z and faces -Z. */
   side: PlayerSide;
 };
 
 /**
- * A player avatar built from primitives only: a capsule torso, a sphere head
- * and a two-part racket.
+ * A player avatar built from primitives only: a capsule torso wearing a
+ * painted kit, a head with face and hair, shoes and a two-part racket. The
+ * customisable parts live in `AvatarParts.tsx`, shared with the Customize
+ * screen's preview.
  *
  * The forwarded ref points at the root group. The parent sets its `position`
  * each frame from the simulated player state.
@@ -78,7 +67,7 @@ type PlayerProps = {
  * survives for the lifetime of the mounted object.
  */
 export const Player = forwardRef<THREE.Group, PlayerProps>(function Player(
-  { color, side },
+  { color, avatar, side },
   ref,
 ) {
   const racketRef = useRef<THREE.Group>(null);
@@ -112,17 +101,9 @@ export const Player = forwardRef<THREE.Group, PlayerProps>(function Player(
    * re-render (a colour change, a remount by the parent) reuses the same GPU
    * resources instead of allocating a fresh set.
    */
-  const shirtMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.04 }),
-    [color],
-  );
-  const skinMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: SKIN_COLOR, roughness: 0.78 }),
-    [],
-  );
   const racketMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: RACKET_COLOR, roughness: 0.45, metalness: 0.2 }),
-    [],
+    () => new THREE.MeshStandardMaterial({ color: avatar.racket, roughness: 0.45, metalness: 0.2 }),
+    [avatar.racket],
   );
   /** The strings: translucent so the racket face reads as a frame, not a paddle. */
   const stringMaterial = useMemo(
@@ -139,15 +120,17 @@ export const Player = forwardRef<THREE.Group, PlayerProps>(function Player(
 
   return (
     <group ref={attachRoot} rotation={[0, baseYaw, 0]}>
-      {/* Torso. Capsule origin is its own centre, so lift it to stand on y=0. */}
-      <mesh castShadow position={[0, TORSO_CENTER_Y, 0]} material={shirtMaterial}>
-        <capsuleGeometry args={[PLAYER.radius, TORSO_CYLINDER, 4, 12]} />
-      </mesh>
+      <Torso shirt={color} avatar={avatar} />
+      <Head avatar={avatar} />
+      <Shoes color={avatar.shoes} />
 
-      {/* Head. */}
-      <mesh castShadow position={[0, HEAD_CENTER_Y, 0]} material={skinMaterial}>
-        <sphereGeometry args={[HEAD_RADIUS, 16, 12]} />
-      </mesh>
+      {/* Wristband on the racket hand, in the kit's accent colour. */}
+      {avatar.accessory === 'wristbands' ? (
+        <mesh position={RACKET_PIVOT} rotation={[0, 0, Math.PI / 2 - 0.5]}>
+          <cylinderGeometry args={[0.06, 0.06, 0.08, 12]} />
+          <meshStandardMaterial color={avatar.shirtAccent} roughness={0.8} />
+        </mesh>
+      ) : null}
 
       {/*
         Racket, held out to the player's right. Its group origin is the grip,

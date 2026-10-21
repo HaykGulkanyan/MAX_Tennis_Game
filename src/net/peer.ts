@@ -13,6 +13,7 @@
 
 import { Peer } from 'peerjs';
 import type { DataConnection } from 'peerjs';
+import { sanitizeProfile } from '../game/avatar';
 import type {
   ClientMessage,
   ConnectionStatus,
@@ -232,7 +233,6 @@ function asMessage<T extends { kind: string }>(data: unknown): T | null {
   return data as T;
 }
 
-const FALLBACK_PROFILE: PlayerProfile = { name: 'Player', color: '#ffffff' };
 
 // --------------------------------------------------------------------------
 // Host
@@ -375,12 +375,10 @@ export function startHost(callbacks: HostCallbacks): Promise<HostHandle> {
         // needs a side so the engine knows which end to put its camera behind.
         const side: PlayerSide = 1;
 
-        const metaProfile = (connection.metadata as { profile?: PlayerProfile } | undefined)
-          ?.profile;
-        const profile: PlayerProfile =
-          metaProfile && typeof metaProfile.name === 'string'
-            ? metaProfile
-            : { ...FALLBACK_PROFILE };
+        // The joiner's profile is untrusted input: checked field by field, with
+        // anything unknown (a bad colour, a made-up hairstyle) set to a default.
+        const metaProfile = (connection.metadata as { profile?: unknown } | undefined)?.profile;
+        const profile: PlayerProfile = sanitizeProfile(metaProfile, 'Player');
 
         if (role === 'player') playerConnectionId = connection.connectionId;
 
@@ -421,7 +419,7 @@ export function startHost(callbacks: HostCallbacks): Promise<HostHandle> {
         // A late profile message can upgrade what we show, but never the role:
         // the seat was assigned on open and re-asking must not steal it.
         if (message.kind === 'profile' && record) {
-          record.profile = message.profile;
+          record.profile = sanitizeProfile(message.profile, record.profile.name);
         }
 
         // Spectator inputs are dropped here, at the edge, so the engine can

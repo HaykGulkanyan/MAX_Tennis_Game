@@ -7,6 +7,8 @@
  * no THREE.Vector3.
  */
 
+import type { Avatar } from './avatar';
+
 export type Vec3 = { x: number; y: number; z: number };
 
 /** 0 defends -Z (the host's side), 1 defends +Z (the guest's side). */
@@ -14,7 +16,10 @@ export type PlayerSide = 0 | 1;
 
 export type PlayerProfile = {
   name: string;
+  /** Main shirt colour; also the player's colour in the HUD and lobby. */
   color: string;
+  /** Everything else about how the player looks. See `avatar.ts`. */
+  avatar: Avatar;
 };
 
 /**

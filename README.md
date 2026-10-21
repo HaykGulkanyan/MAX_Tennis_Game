@@ -22,6 +22,22 @@ deliberate shot gives you far more control.
 
 First to 10 points wins, and you have to win by 2.
 
+## Customize your player
+
+Press **Customize** on the main menu (or on the name screen when joining a
+friend) to change your player's look, with a 3D preview you can drag to turn:
+
+- **Hair:** style and colour
+- **Skin:** tone
+- **Shirt:** colour, design (stripes, hoops, sash, star or your own number),
+  design colour, and shorts colour
+- **Shoes:** colour
+- **Face:** happy, focused, angry, surprised or cool
+- **Extras:** a cap, headband or wristbands, and your racket colour
+
+**Randomize** rolls a whole new look. Your look is saved in your browser, and
+in an online match your opponent sees it too.
+
 ## Playing with a friend
 
 1. The host creates a room.

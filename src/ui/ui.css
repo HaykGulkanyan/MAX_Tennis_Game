@@ -918,3 +918,128 @@ kbd {
     bottom: calc(clamp(8px, 2vw, 18px) + 48px);
   }
 }
+
+/* ----------------------------------------------------------------
+ * Customize
+ *
+ * Preview on the left, tabs on the right; stacked on narrow screens.
+ * The panel is widened for this screen only, via :has(), so the
+ * other menus keep their sizes.
+ * ---------------------------------------------------------------- */
+
+.panel-wide:has(.customize) {
+  max-width: 820px;
+}
+
+.customize {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+.customize-preview {
+  position: relative;
+  height: 380px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: radial-gradient(90% 70% at 50% 35%, rgba(47, 127, 232, 0.28), rgba(7, 12, 22, 0.6));
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.customize-preview:active {
+  cursor: grabbing;
+}
+
+.customize-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.customize-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.customize-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1 1 auto;
+  appearance: none;
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.tab.is-active {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.customize-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 300px;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.swatches-small .swatch {
+  width: 34px;
+  height: 34px;
+}
+
+.input-number {
+  max-width: 120px;
+}
+
+@media (max-width: 680px) {
+  .customize {
+    grid-template-columns: 1fr;
+  }
+  .customize-preview {
+    height: 280px;
+  }
+  .customize-panel {
+    min-height: 0;
+  }
+}
