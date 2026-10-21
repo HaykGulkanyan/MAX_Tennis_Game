@@ -45,6 +45,8 @@ import {
   startHost,
 } from './net/peer';
 import type { GuestHandle, HostHandle } from './net/peer';
+import { connectDirectory } from './net/directory';
+import type { DirectoryHandle } from './net/directory';
 import { useStore } from './state/store';
 import type { UiScreen } from './state/store';
 import { CustomizeScreen } from './ui/CustomizeScreen';
@@ -109,6 +111,52 @@ export default function App() {
     customizeReturn.current = useStore.getState().screen;
     setScreen('customize');
   }, [setScreen]);
+
+  /*
+   * The public room list. Connected for the whole visit, not just on the
+   * menu: this browser may be the one holding the list for everyone else,
+   * and must keep doing so while its player is in a match.
+   */
+  const directoryRef = useRef<DirectoryHandle | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handle = connectDirectory({
+      onRooms: (rooms, online) => useStore.getState().setDirectory(rooms, online),
+      onStatus: (status) => useStore.getState().setDirectoryStatus(status),
+    });
+    directoryRef.current = handle;
+    // Leave promptly on close, so our room (and the list, if we hold it)
+    // moves on at once instead of waiting for a timeout.
+    const leave = () => handle.close();
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      handle.close();
+      directoryRef.current = null;
+    };
+  }, []);
+
+  /*
+   * List our room while we are in the lobby waiting for an opponent. It comes
+   * down as soon as someone joins, the match starts, or we cancel, so the list
+   * only ever shows rooms that can actually be joined.
+   */
+  const listedCode = useStore((s) => s.roomCode);
+  const hostStatus = useStore((s) => s.connection);
+  const gameMode = useStore((s) => s.mode);
+  const roomPublic = useStore((s) => s.roomPublic);
+  useEffect(() => {
+    const waiting = hostStatus === 'hosting' || hostStatus === 'waiting-for-rejoin';
+    const open =
+      gameMode === 'host' && screen === 'lobby' && listedCode !== null && roomPublic && waiting;
+    directoryRef.current?.publish(
+      open && listedCode
+        ? { code: listedCode, name: profile.name.trim() || 'Host', color: profile.color }
+        : null,
+    );
+  }, [gameMode, screen, listedCode, roomPublic, hostStatus, profile.name, profile.color]);
+
+  const setJoinError = useStore((s) => s.setJoinError);
 
   /** Set when the page was opened from an invite link. */
   const [joiningCode, setJoiningCode] = useState<string | null>(null);
@@ -482,6 +530,19 @@ export default function App() {
               });
               setScreen('playing');
               break;
+            case 'full': {
+              // Someone else got the seat first (the list can lag by a moment).
+              if (pingTimerRef.current !== null) {
+                window.clearInterval(pingTimerRef.current);
+                pingTimerRef.current = null;
+              }
+              guestRef.current?.close();
+              guestRef.current = null;
+              joiningRef.current = false;
+              setConnection('error');
+              setJoinError('That room is already full. Pick another room.');
+              break;
+            }
             case 'pong': {
               const rtt = Math.round(performance.now() - message.sent);
               setLatency(rtt);
@@ -494,6 +555,7 @@ export default function App() {
         onError: (error) => {
           setConnection('error');
           showCallout(error);
+          setJoinError(error);
         },
       });
       guestRef.current = guest;
@@ -508,8 +570,9 @@ export default function App() {
         guest.send({ kind: 'ping', sent: performance.now() });
       }, 2000);
       pingTimerRef.current = pingTimer;
-    } catch {
+    } catch (error) {
       setConnection('error');
+      setJoinError(error instanceof Error ? error.message : 'Could not join that room.');
       // Let them press Join again; nothing is connected to be duplicated.
       joiningRef.current = false;
     }
@@ -526,6 +589,17 @@ export default function App() {
     setSide,
     showCallout,
   ]);
+
+  /** Join a room picked from the public list: same path as an invite link. */
+  const joinListedRoom = useCallback(
+    (code: string) => {
+      playUiClick();
+      setJoinError(null);
+      setJoiningCode(code);
+      setScreen('profile');
+    },
+    [setJoinError, setScreen],
+  );
 
   const confirmProfile = useCallback(() => {
     if (joiningCode) void joinAsGuest();
@@ -599,6 +673,7 @@ export default function App() {
         <MenuScreen
           onPlayAi={startAiMatch}
           onCustomize={openCustomize}
+          onJoinRoom={joinListedRoom}
           onHost={() => void startHosting()}
           onPractice={startPractice}
         />
@@ -616,7 +691,12 @@ export default function App() {
           joiningCode={joiningCode}
           onConfirm={confirmProfile}
           onCustomize={openCustomize}
-          onBack={() => setScreen('menu')}
+          onBack={() => {
+            // Also hangs up a join still in progress, so it cannot finish
+            // behind the menu and seat us in a room we walked away from.
+            setJoiningCode(null);
+            exitToMenu();
+          }}
         />
       )}
       {screen === 'lobby' && (

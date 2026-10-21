@@ -149,6 +149,33 @@ export function roomCodeFromUrl(): string | null {
   }
 }
 
+/**
+ * A stable id for this browser, sent when joining a room.
+ *
+ * Rooms are public now, so the host has to tell "the same player coming back"
+ * (a refresh, a double-clicked Join) apart from "a stranger who clicked Join
+ * on a room that just filled". Only the former may take over the seat.
+ */
+const CLIENT_ID_KEY = 'maxtennis.clientId';
+let sessionClientId: string | null = null;
+
+export function getClientId(): string {
+  if (sessionClientId) return sessionClientId;
+  try {
+    const saved = window.localStorage.getItem(CLIENT_ID_KEY);
+    if (saved) return (sessionClientId = saved);
+  } catch {
+    /* storage blocked: fall back to an id for this visit only */
+  }
+  const fresh = generateRoomCode() + generateRoomCode() + generateRoomCode();
+  try {
+    window.localStorage.setItem(CLIENT_ID_KEY, fresh);
+  } catch {
+    /* as above */
+  }
+  return (sessionClientId = fresh);
+}
+
 // --------------------------------------------------------------------------
 // Errors
 // --------------------------------------------------------------------------
@@ -272,6 +299,8 @@ export function startHost(callbacks: HostCallbacks): Promise<HostHandle> {
      * would otherwise be demoted to a spectator forever.
      */
     let playerConnectionId: string | null = null;
+    /** The browser id of whoever holds the seat; see `getClientId`. */
+    let playerClientId: string | null = null;
 
     let settled = false;
     let closed = false;
@@ -346,14 +375,39 @@ export function startHost(callbacks: HostCallbacks): Promise<HostHandle> {
         const wantsPlayer =
           (connection.metadata as { role?: unknown } | undefined)?.role !== 'spectator';
 
+        const clientId = (connection.metadata as { clientId?: unknown } | undefined)?.clientId;
+        const sameBrowser =
+          typeof clientId === 'string' && clientId !== '' && clientId === playerClientId;
+
         /*
-         * The newest player takes the seat. Only the friend has the link, so a
-         * second player connection is nearly always that same person: a
-         * refreshed tab whose old channel has not timed out yet, the link
-         * opened twice, or a double-clicked Join. Seating them as a spectator
-         * instead left them watching a match they could not move in. The old
-         * connection is dropped quietly, without the pause a real drop gets,
-         * because its replacement is already here.
+         * The seat is taken. Rooms are listed publicly, so this may be a
+         * stranger who clicked Join on a room that just filled: turn them away
+         * with a clear "room full" rather than seating them as a spectator
+         * (which looks frozen) or, worse, kicking out the current player.
+         */
+        if (wantsPlayer && playerConnectionId !== null && !sameBrowser) {
+          try {
+            connection.send({ kind: 'full' } satisfies HostMessage);
+          } catch {
+            /* closing anyway */
+          }
+          // Give the message a moment to arrive before hanging up.
+          window.setTimeout(() => {
+            try {
+              connection.close();
+            } catch {
+              /* already gone */
+            }
+          }, 400);
+          return;
+        }
+
+        /*
+         * The same browser is back for its own seat: a refreshed tab whose old
+         * channel has not timed out yet, the link opened twice, or a
+         * double-clicked Join. The newest connection takes over, and the old
+         * one is dropped quietly, without the pause a real drop gets, because
+         * its replacement is already here.
          */
         if (wantsPlayer && playerConnectionId !== null) {
           const previous = peers.get(playerConnectionId);
@@ -380,7 +434,10 @@ export function startHost(callbacks: HostCallbacks): Promise<HostHandle> {
         const metaProfile = (connection.metadata as { profile?: unknown } | undefined)?.profile;
         const profile: PlayerProfile = sanitizeProfile(metaProfile, 'Player');
 
-        if (role === 'player') playerConnectionId = connection.connectionId;
+        if (role === 'player') {
+          playerConnectionId = connection.connectionId;
+          playerClientId = typeof clientId === 'string' ? clientId : null;
+        }
 
         peers.set(connection.connectionId, { connection, role, side, profile });
 
@@ -592,7 +649,7 @@ export function joinRoom(
       // this joiner the instant the channel opens, before any message arrives.
       const outgoing = peer.connect(peerIdForRoom(code), {
         ...CONNECTION_OPTIONS,
-        metadata: { role, profile },
+        metadata: { role, profile, clientId: getClientId() },
       });
       connection = outgoing;
 

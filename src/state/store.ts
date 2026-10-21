@@ -26,6 +26,7 @@ import type {
 import { SHIRT_COLORS } from '../game/constants';
 import { DEFAULT_AVATAR, sanitizeProfile } from '../game/avatar';
 import type { Avatar } from '../game/avatar';
+import type { DirectoryStatus, RoomInfo } from '../net/directory';
 
 export type UiScreen =
   | 'menu'
@@ -68,6 +69,15 @@ export type StoreState = {
   /** True when the browser cannot play (no pointer, e.g. a phone). */
   unsupported: boolean;
 
+  // --- The public room list. Session-wide: kept across menu resets. ---
+  rooms: RoomInfo[];
+  onlineCount: number;
+  directoryStatus: DirectoryStatus;
+  /** Whether this host's room is shown in the public list. */
+  roomPublic: boolean;
+  /** Why joining a room failed, shown on the joining screen. */
+  joinError: string | null;
+
   setScreen: (screen: UiScreen) => void;
   setMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
@@ -85,6 +95,10 @@ export type StoreState = {
   setLatency: (latencyMs: number) => void;
   setCallout: (callout: string | null) => void;
   setUnsupported: (unsupported: boolean) => void;
+  setDirectory: (rooms: RoomInfo[], onlineCount: number) => void;
+  setDirectoryStatus: (status: DirectoryStatus) => void;
+  setRoomPublic: (roomPublic: boolean) => void;
+  setJoinError: (joinError: string | null) => void;
   /** Mirror the parts of the match the HUD shows. Called at most a few Hz. */
   syncMatch: (match: {
     scores: [number, number];
@@ -146,6 +160,11 @@ const initial = {
   callout: null as string | null,
   winner: null as PlayerSide | null,
   unsupported: false,
+  rooms: [] as RoomInfo[],
+  onlineCount: 0,
+  directoryStatus: 'connecting' as DirectoryStatus,
+  roomPublic: true,
+  joinError: null as string | null,
 };
 
 export const useStore = create<StoreState>((set) => ({
@@ -188,6 +207,10 @@ export const useStore = create<StoreState>((set) => ({
   setLatency: (latencyMs) => set({ latencyMs }),
   setCallout: (callout) => set({ callout }),
   setUnsupported: (unsupported) => set({ unsupported }),
+  setDirectory: (rooms, onlineCount) => set({ rooms, onlineCount }),
+  setDirectoryStatus: (directoryStatus) => set({ directoryStatus }),
+  setRoomPublic: (roomPublic) => set({ roomPublic }),
+  setJoinError: (joinError) => set({ joinError }),
   syncMatch: ({ scores, phase, server, winner }) =>
     set((s) => {
       // Avoid pointless re-renders: only write when something actually moved.
@@ -202,7 +225,14 @@ export const useStore = create<StoreState>((set) => ({
       }
       return { scores: [scores[0], scores[1]], phase, server, winner };
     }),
-  // Keep the voice preference: leaving a match is not a reason to forget it.
+  // Keep session-wide state: the voice preference and the live room list.
   reset: () =>
-    set((s) => ({ ...initial, profile: defaultProfile(), umpireVoice: s.umpireVoice })),
+    set((s) => ({
+      ...initial,
+      profile: defaultProfile(),
+      umpireVoice: s.umpireVoice,
+      rooms: s.rooms,
+      onlineCount: s.onlineCount,
+      directoryStatus: s.directoryStatus,
+    })),
 }));

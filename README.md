@@ -38,15 +38,24 @@ friend) to change your player's look, with a 3D preview you can drag to turn:
 **Randomize** rolls a whole new look. Your look is saved in your browser, and
 in an online match your opponent sees it too.
 
-## Playing with a friend
+## Playing online
 
-1. The host creates a room.
-2. The host shares the room link.
-3. The friend opens the link and enters a name.
-4. They join, and the match begins.
+Press **Play with a Friend** to open a room. Then either:
 
-The connection is peer-to-peer over WebRTC; there is no game server, so the two
-browsers exchange game state directly.
+- **Wait for someone online.** Your room appears in the **Online rooms** list
+  on everyone's main menu, and anyone can press **Join**.
+- **Invite a friend.** Send them the room link; they open it and join.
+
+A room only stays in the list while it can be joined. It disappears as soon as
+someone joins, the match starts, or the host cancels or closes the page. Turn
+off **Show in online rooms** in your room to keep it private, so that only
+people with the link can join. If someone tries to join a room that just
+filled, they are told it is full.
+
+There is no game server. The two players' browsers exchange game state
+directly over WebRTC, and the room list is kept by one of the online players'
+browsers: if that player leaves, another browser takes the list over within a
+few seconds.
 
 ## Local development
 

@@ -88,6 +88,7 @@ export function MenuScreen(props: {
   onHost: () => void;
   onPractice: () => void;
   onCustomize: () => void;
+  onJoinRoom: (code: string) => void;
 }): React.ReactElement {
   const difficulty = useStore((s) => s.difficulty);
   const setDifficulty = useStore((s) => s.setDifficulty);
@@ -133,7 +134,7 @@ export function MenuScreen(props: {
             Play with a Friend
           </button>
           <p className="menu-note">
-            Creates a room and gives you a link to send them.
+            Opens a room everyone online can see, plus a link to send a friend.
           </p>
         </section>
 
@@ -151,6 +152,8 @@ export function MenuScreen(props: {
           <p className="menu-note">Hair, face, shirt, shoes and more.</p>
         </section>
       </div>
+
+      <OnlineRooms onJoin={props.onJoinRoom} />
 
       <section className="howto">
         <h2 className="howto-title">How to play</h2>
@@ -190,6 +193,68 @@ export function MenuScreen(props: {
   );
 }
 
+// --- Online rooms -------------------------------------------------------
+
+/**
+ * Rooms other players have opened, live. Updates as rooms open and close; a
+ * room disappears the moment its host starts, cancels or leaves.
+ */
+function OnlineRooms(props: { onJoin: (code: string) => void }): React.ReactElement {
+  const rooms = useStore((s) => s.rooms);
+  const online = useStore((s) => s.onlineCount);
+  const status = useStore((s) => s.directoryStatus);
+
+  return (
+    <section className="rooms" aria-labelledby="rooms-title">
+      <div className="rooms-head">
+        <h2 className="rooms-title" id="rooms-title">
+          Online rooms
+        </h2>
+        <span className="rooms-online" role="status">
+          {status === 'online' ? (
+            <>
+              <span className="net-dot net-dot-ok" aria-hidden="true" />
+              {online} {online === 1 ? 'player' : 'players'} online
+            </>
+          ) : status === 'connecting' ? (
+            <>
+              <span className="spinner" aria-hidden="true" />
+              Connecting...
+            </>
+          ) : (
+            'Offline'
+          )}
+        </span>
+      </div>
+
+      {rooms.length > 0 ? (
+        <ul className="rooms-list">
+          {rooms.map((room) => (
+            <li key={room.code} className="room">
+              <span className="chip-dot" style={{ backgroundColor: room.color }} aria-hidden="true" />
+              <span className="room-name">
+                {room.name ? `${room.name}'s room` : 'Open room'}
+                <span className="room-code mono">{room.code}</span>
+              </span>
+              <button type="button" className="btn btn-primary btn-join" onClick={() => props.onJoin(room.code)}>
+                Join
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rooms-empty">
+          {status === 'offline'
+            ? 'The room list is unavailable right now. Invite links still work.'
+            : status === 'connecting'
+              ? 'Looking for open rooms...'
+              : 'No open rooms right now. Press Play with a Friend to open one.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
 // --- Profile ------------------------------------------------------------
 
 export function ProfileScreen(props: {
@@ -211,6 +276,7 @@ export function ProfileScreen(props: {
     props.joiningCode !== null &&
     (connection === 'connecting' || connection === 'connected');
   const ready = profile.name.trim().length > 0 && !joining;
+  const joinError = useStore((s) => s.joinError);
 
   const submit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -273,6 +339,12 @@ export function ProfileScreen(props: {
           Customize your look
         </button>
 
+        {props.joiningCode !== null && connection === 'error' && joinError ? (
+          <p className="form-error" role="alert">
+            {joinError}
+          </p>
+        ) : null}
+
         <div className="row">
           <button type="button" className="btn btn-ghost" onClick={props.onBack}>
             Back
@@ -302,6 +374,8 @@ export function LobbyScreen(props: {
   const connection = useStore((s) => s.connection);
   const profiles = useStore((s) => s.profiles);
   const side = useStore((s) => s.side);
+  const roomPublic = useStore((s) => s.roomPublic);
+  const setRoomPublic = useStore((s) => s.setRoomPublic);
 
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | null>(null);
@@ -384,6 +458,22 @@ export function LobbyScreen(props: {
           {status}
         </p>
       </div>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={roomPublic}
+          onChange={(event) => setRoomPublic(event.target.checked)}
+        />
+        <span>
+          Show in online rooms
+          <span className="toggle-note">
+            {roomPublic
+              ? 'Anyone online can see and join this room.'
+              : 'Hidden: only people with the link can join.'}
+          </span>
+        </span>
+      </label>
 
       <div className="lobby-players">
         <PlayerChip profile={profiles[0]} side={0} you={side === 0} />

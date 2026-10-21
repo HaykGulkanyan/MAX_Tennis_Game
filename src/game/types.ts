@@ -174,6 +174,8 @@ export type HostMessage =
   /** Tells a joiner which side it controls, or that it is only watching. */
   | { kind: 'welcome'; side: PlayerSide; role: PeerRole }
   | { kind: 'start' }
+  /** The player seat is taken by someone else; the joiner is turned away. */
+  | { kind: 'full' }
   | { kind: 'pong'; sent: number };
 
 export type ConnectionStatus =
