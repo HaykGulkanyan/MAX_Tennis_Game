@@ -192,6 +192,14 @@ export function createInputController(): InputController {
 
   const onMouseDown = (event: Event): void => {
     const me = event as MouseEvent;
+    /*
+     * Only a press on the court itself is a shot or a charge. The controller
+     * listens on the whole window, so without this a click on a button (a
+     * camera view, a venue card on the vote before a rematch) was latched as
+     * a shot and fired on the next tick: the player swung at nothing, or
+     * served the instant the next match began.
+     */
+    if (typeof HTMLCanvasElement !== 'undefined' && !(me.target instanceof HTMLCanvasElement)) return;
     if (me.button === 0) {
       shootLatched = true;
     } else if (me.button === 2) {
