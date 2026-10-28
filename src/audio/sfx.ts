@@ -22,6 +22,9 @@
  *    reports it finished, so the graph never grows.
  */
 
+import { synthCheer, synthMurmur } from './crowdSynth';
+import type { ScheduledSource } from './crowdSynth';
+
 /** Master output. Everything routes through this, so muting is one gain write. */
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -260,47 +263,40 @@ export function playUiClick(): void {
 }
 
 /**
- * Crowd roar after a point. `intensity` is 0..1.5; a match win is the top end.
- *
- * Two layers of band-passed noise: a low rumble (the mass of voices) and a
- * brighter mid band (individual shouts). Unlike the percussive cues it swells
- * in over a quarter second and dies away slowly, which is what makes noise
- * read as a crowd rather than as static.
+ * Crowd cheer after a point. `intensity` is 0..1.5; a match win is the top end.
+ * The sound itself is built in `crowdSynth.ts`: roar, applause, voices and
+ * whistles, layered.
  */
 export function playCrowdCheer(intensity: number): void {
-  play((c, out, t) => {
-    const level = 0.25 + Math.min(1.5, Math.max(0, intensity)) * 0.3;
-    const swell = 0.25;
-    const duration = 1.6 + intensity * 1.2;
-    const sources: AudioScheduledSourceNode[] = [];
+  playScheduled((c, out, t) => (noiseBuffer ? synthCheer(c, out, noiseBuffer, t, intensity) : []));
+}
 
-    for (const layer of [
-      { hz: 520, q: 0.7, gain: 1 },
-      { hz: 1700, q: 1.1, gain: 0.45 },
-    ]) {
-      const noise = c.createBufferSource();
-      noise.buffer = noiseBuffer;
-      noise.loop = true;
-      noise.loopEnd = noiseBuffer ? noiseBuffer.duration : 1;
+/** The murmur currently playing under a match, if any. */
+let murmur: { fadeOut: (at: number) => void } | null = null;
 
-      const band = c.createBiquadFilter();
-      band.type = 'bandpass';
-      band.frequency.value = layer.hz;
-      band.Q.value = layer.q;
+/** Start the quiet crowd murmur under a match. Safe to call repeatedly. */
+export function startCrowdMurmur(): void {
+  if (murmur) return;
+  try {
+    if (!ctx || !master || !noiseBuffer) return;
+    const c = ctx;
+    const built = synthMurmur(c, master, noiseBuffer);
+    startAll(c, built.sources);
+    murmur = built;
+  } catch {
+    murmur = null;
+  }
+}
 
-      const gain = c.createGain();
-      const peak = Math.max(0.0002, level * layer.gain);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peak, t + swell);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-      gain.gain.setValueAtTime(0, t + duration);
-
-      noise.connect(band).connect(gain).connect(out);
-      sources.push(noise);
-    }
-
-    return { sources, stopAt: t + duration };
-  });
+/** Fade the murmur out, e.g. when leaving the match. */
+export function stopCrowdMurmur(): void {
+  if (!murmur || !ctx) return;
+  try {
+    murmur.fadeOut(ctx.currentTime);
+  } catch {
+    /* nothing left to stop */
+  }
+  murmur = null;
 }
 
 // --- Internals -------------------------------------------------------------
@@ -351,6 +347,38 @@ function play(build: (c: AudioContext, out: GainNode, t: number) => Voice): void
         }
       };
     }
+  } catch {
+    // A sound is never worth interrupting the game for.
+  }
+}
+
+/** Start every source at its own time, and disconnect each when it ends. */
+function startAll(c: BaseAudioContext, sources: ScheduledSource[]): void {
+  for (const { source, start, stop, offset } of sources) {
+    const at = Math.max(start, c.currentTime);
+    if (offset !== undefined && source instanceof AudioBufferSourceNode) source.start(at, offset);
+    else source.start(at);
+    source.stop(Math.max(stop, at + 0.001));
+    source.onended = () => {
+      try {
+        source.disconnect();
+      } catch {
+        // Already torn down.
+      }
+    };
+  }
+}
+
+/**
+ * Like `play`, for sounds made of many parts that start at different moments
+ * (a cheer's claps and voices), with the same guards.
+ */
+function playScheduled(
+  build: (c: AudioContext, out: GainNode, t: number) => ScheduledSource[],
+): void {
+  try {
+    if (muted || !ctx || !master || ctx.state !== 'running') return;
+    startAll(ctx, build(ctx, master, ctx.currentTime));
   } catch {
     // A sound is never worth interrupting the game for.
   }
