@@ -158,6 +158,8 @@ export function GameScene({ engine, input, side }: Props) {
    * The frame loop reads the value through this binding.
    */
   const cameraMode = useStore((s) => s.cameraMode);
+  /** Where this match is played; set by the venue vote before it starts. */
+  const venue = useStore((s) => s.venue);
 
   /**
    * Smoothed camera target, so the view glides instead of snapping. It starts
@@ -424,7 +426,7 @@ export function GameScene({ engine, input, side }: Props) {
 
   return (
     <>
-      <Court />
+      <Court venue={venue} side={side} />
       <Player ref={player0} color={profiles[0].color} avatar={profiles[0].avatar} side={0} />
       <Player ref={player1} color={profiles[1].color} avatar={profiles[1].avatar} side={1} />
       <Ball ref={ball} />

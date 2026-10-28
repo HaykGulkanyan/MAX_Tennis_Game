@@ -636,8 +636,12 @@ kbd {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
+  /* A dark pill, so it stays readable against a bright daytime sky. */
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(7, 12, 22, 0.66);
+  backdrop-filter: blur(6px);
 }
 
 .net-indicator {
@@ -1160,4 +1164,140 @@ kbd {
   color: #ffd6cf;
   background: rgba(232, 80, 58, 0.16);
   border: 1px solid rgba(232, 80, 58, 0.45);
+}
+
+/* ----------------------------------------------------------------
+ * Venue vote
+ * ---------------------------------------------------------------- */
+
+.panel-wide:has(.venues) {
+  max-width: 860px;
+}
+
+.venues {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.venue {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 0 12px;
+  overflow: hidden;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    opacity 200ms ease;
+}
+
+.venue:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+
+.venue:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.venue:disabled {
+  cursor: default;
+}
+
+.venue.is-mine {
+  border-color: rgba(200, 242, 74, 0.7);
+}
+
+.venue.is-chosen {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(200, 242, 74, 0.25);
+}
+
+.venue.is-faded {
+  opacity: 0.4;
+}
+
+.venue-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.venue-name {
+  padding: 6px 12px 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.venue-surface {
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.venue-blurb {
+  padding: 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.venue-voters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 26px;
+  padding: 6px 12px 0;
+}
+
+.voter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vote-timer {
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 680px) {
+  .venues {
+    grid-template-columns: 1fr;
+  }
+  .venue {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    column-gap: 4px;
+    padding: 0;
+  }
+  .venue-art {
+    grid-row: 1 / span 5;
+  }
+  .venue-art svg {
+    height: 100%;
+  }
+  .venue-voters {
+    padding-bottom: 10px;
+  }
 }

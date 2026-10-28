@@ -37,6 +37,8 @@ type Props = {
   /** Inner half-extents of the perimeter boards, from the court. */
   readonly wallHalfX: number
   readonly wallHalfZ: number
+  /** Alternating row colours, set by the venue. */
+  readonly standColors: readonly [string, string]
 }
 
 /** Rows of seating in each stand. */
@@ -57,8 +59,6 @@ const SEAT_PITCH = 0.75
 const OCCUPANCY = 0.86
 
 const COLORS = {
-  stepA: '#34465c',
-  stepB: '#2a3a4e',
   skin: ['#f1c9a5', '#d9a77e', '#b07a52', '#8a5a3b', '#5e3d29'],
   /** Bright, varied shirts so the crowd reads as people, not texture. */
   shirts: [
@@ -115,7 +115,7 @@ type Seat = { x: number; y: number; z: number; along: 'x' | 'z' }
  * widened in step with the side rows, so the four stands meet at the corners
  * as a stepped bowl instead of leaving open gaps.
  */
-function buildStands(wallHalfX: number, wallHalfZ: number) {
+function buildStands(wallHalfX: number, wallHalfZ: number, colors: readonly [string, string]) {
   const sideStart = wallHalfX + SIDE_GAP
   const endStart = wallHalfZ + END_GAP
   const steps: Step[] = []
@@ -123,7 +123,7 @@ function buildStands(wallHalfX: number, wallHalfZ: number) {
 
   for (let row = 0; row < ROWS; row++) {
     const top = FRONT_STEP + row * ROW_RISE
-    const color = row % 2 === 0 ? COLORS.stepA : COLORS.stepB
+    const color = row % 2 === 0 ? colors[0] : colors[1]
     const near = row * ROW_DEPTH
     const mid = near + ROW_DEPTH / 2
 
@@ -445,10 +445,10 @@ function UmpireChair({ x }: { x: number }): React.ReactElement {
  * Stadium
  * ------------------------------------------------------------------ */
 
-export function Stadium({ wallHalfX, wallHalfZ }: Props): React.ReactElement {
+export function Stadium({ wallHalfX, wallHalfZ, standColors }: Props): React.ReactElement {
   const { steps, seats, outerX, outerZ } = useMemo(
-    () => buildStands(wallHalfX, wallHalfZ),
-    [wallHalfX, wallHalfZ],
+    () => buildStands(wallHalfX, wallHalfZ, standColors),
+    [wallHalfX, wallHalfZ, standColors],
   )
 
   return (

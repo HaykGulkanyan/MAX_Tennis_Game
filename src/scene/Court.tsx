@@ -22,7 +22,11 @@ import type React from 'react'
 import type * as THREE from 'three'
 
 import { COURT } from '../game/constants'
+import type { PlayerSide } from '../game/types'
+import { VENUE_PALETTE } from '../game/venues'
+import type { Venue } from '../game/venues'
 import { Stadium } from './Stadium'
+import { Sky, VenueScenery } from './VenueScenery'
 
 /* ------------------------------------------------------------------ *
  * Derived geometry
@@ -97,26 +101,20 @@ const SUN_POSITION: readonly [number, number, number] = [14, 22, 10]
  * ------------------------------------------------------------------ */
 
 /*
- * Hard-court palette, modelled on a real blue/green stadium court.
+ * Fixed colours: the net and the boards look the same at every venue. The
+ * surface, lines, ground and light come from the venue's palette
+ * (`VENUE_PALETTE` in game/venues.ts).
  *
- * The in-bounds area is deliberately a different hue from the runoff, not just
- * a darker shade of it: on a real court that contrast is the main thing that
- * makes the playing area legible at a glance, and without it the whole surface
- * reads as one flat slab. Everything is also much lighter than a "dark theme"
- * instinct suggests, because the court is lit daylight and a dim court just
- * looks like an unfinished render.
+ * Each palette keeps the in-bounds area a different hue from the runoff, not
+ * just a darker shade of it: that contrast is the main thing that makes the
+ * playing area legible at a glance.
  */
 const COLORS = {
-  court: '#2d7dd2',
-  runoff: '#3a9e78',
-  ground: '#2b6b52',
-  line: '#ffffff',
   netMesh: '#1b2733',
   netBand: '#f4f7fa',
   post: '#3e4a56',
   wall: '#1f3446',
   wallCap: '#2c4a63',
-  boardStripe: '#c8f24a',
 } as const
 
 /**
@@ -148,6 +146,8 @@ type LineProps = {
   readonly position: readonly [number, number]
   /** Size on X and Z. */
   readonly size: readonly [number, number]
+  /** Paint colour; set by the venue. */
+  readonly color: string
 }
 
 /**
@@ -155,7 +155,7 @@ type LineProps = {
  * `scale`, so the whole set of lines costs one geometry upload instead of a
  * dozen; three.js reuses the cached buffer for each mesh.
  */
-function Line({ position, size }: LineProps) {
+function Line({ position, size, color }: LineProps) {
   return (
     <mesh
       position={[position[0], LINE_Y, position[1]]}
@@ -170,7 +170,7 @@ function Line({ position, size }: LineProps) {
         camera is nearly edge-on to the court.
       */}
       <meshStandardMaterial
-        color={COLORS.line}
+        color={color}
         roughness={0.85}
         metalness={0}
         polygonOffset
@@ -185,9 +185,45 @@ function Line({ position, size }: LineProps) {
  * Court
  * ------------------------------------------------------------------ */
 
-export function Court(): React.ReactElement {
+/**
+ * Mowing stripes for a grass court: bands across the court in a second
+ * green, lifted between the surface and the paint so neither z-fights.
+ */
+function GrassStripes({ color }: { color: string }): React.ReactElement {
+  const bands = 12
+  const length = (FIELD_HALF_Z * 2) / bands
+  return (
+    <>
+      {Array.from({ length: bands / 2 }, (_, i) => (
+        <mesh
+          key={i}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0.006, -FIELD_HALF_Z + length * (i * 2 + 0.5)]}
+          receiveShadow
+          ref={freezeTransform}
+        >
+          <planeGeometry args={[FIELD_HALF_X * 2, length]} />
+          <meshStandardMaterial color={color} roughness={0.95} metalness={0} />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+export function Court({
+  venue,
+  side,
+}: {
+  venue: Venue
+  /** The local player's side: the venue's landmark goes beyond the far end. */
+  side: PlayerSide
+}): React.ReactElement {
+  const pal = VENUE_PALETTE[venue]
+  // Side 0 defends -Z and looks toward +Z, so its far end is +Z.
+  const farSign = side === 0 ? 1 : -1
   return (
     <group>
+      <Sky palette={pal} />
       {/* ---------- Lighting ---------- */}
 
       {/*
@@ -195,11 +231,12 @@ export function Court(): React.ReactElement {
         actual shaping. Kept fairly high because a fully dark shadow side makes
         the stylized flat colours look muddy.
       */}
-      <ambientLight intensity={0.55} color="#cfe3f2" />
+      <ambientLight intensity={pal.ambientIntensity} color={pal.ambient} />
 
       <directionalLight
         position={[...SUN_POSITION]}
-        intensity={2.1}
+        intensity={pal.sunIntensity}
+        color={pal.sun}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -233,7 +270,7 @@ export function Court(): React.ReactElement {
       >
         <planeGeometry args={[FIELD_HALF_X * 2, FIELD_HALF_Z * 2]} />
         <meshStandardMaterial
-          color={COLORS.runoff}
+          color={pal.runoff}
           roughness={0.95}
           metalness={0}
         />
@@ -251,56 +288,67 @@ export function Court(): React.ReactElement {
       >
         <planeGeometry args={[COURT.halfWidth * 2, COURT.halfLength * 2]} />
         <meshStandardMaterial
-          color={COLORS.court}
+          color={pal.court}
           roughness={0.95}
           metalness={0}
         />
       </mesh>
 
+      {pal.stripes ? <GrassStripes color={pal.stripes} /> : null}
+
       {/* ---------- Painted lines ---------- */}
 
       {/* Sidelines: full length of the court, one per side. */}
       <Line
+        color={pal.line}
         position={[-COURT.halfWidth + HALF_LINE, 0]}
         size={[COURT.lineWidth, COURT.halfLength * 2]}
       />
       <Line
+        color={pal.line}
         position={[COURT.halfWidth - HALF_LINE, 0]}
         size={[COURT.lineWidth, COURT.halfLength * 2]}
       />
 
       {/* Baselines: across the full width at each end. */}
       <Line
+        color={pal.line}
         position={[0, -COURT.halfLength + HALF_LINE]}
         size={[COURT.halfWidth * 2, COURT.lineWidth]}
       />
       <Line
+        color={pal.line}
         position={[0, COURT.halfLength - HALF_LINE]}
         size={[COURT.halfWidth * 2, COURT.lineWidth]}
       />
 
       {/* Service lines, one either side of the net. */}
       <Line
+        color={pal.line}
         position={[0, -COURT.serviceLine]}
         size={[COURT.halfWidth * 2, COURT.lineWidth]}
       />
       <Line
+        color={pal.line}
         position={[0, COURT.serviceLine]}
         size={[COURT.halfWidth * 2, COURT.lineWidth]}
       />
 
       {/* Centre service line: runs service line to service line through Z = 0. */}
       <Line
+        color={pal.line}
         position={[0, 0]}
         size={[COURT.lineWidth, COURT.serviceLine * 2]}
       />
 
       {/* Centre marks: short stubs on each baseline, pointing into the court. */}
       <Line
+        color={pal.line}
         position={[0, -COURT.halfLength + CENTRE_MARK_LENGTH / 2]}
         size={[COURT.lineWidth, CENTRE_MARK_LENGTH]}
       />
       <Line
+        color={pal.line}
         position={[0, COURT.halfLength - CENTRE_MARK_LENGTH / 2]}
         size={[COURT.lineWidth, CENTRE_MARK_LENGTH]}
       />
@@ -385,9 +433,9 @@ export function Court(): React.ReactElement {
         receiveShadow
         ref={freezeTransform}
       >
-        <planeGeometry args={[120, 120]} />
+        <planeGeometry args={[900, 900]} />
         <meshStandardMaterial
-          color={COLORS.ground}
+          color={pal.ground}
           roughness={1}
           metalness={0}
         />
@@ -435,12 +483,13 @@ export function Court(): React.ReactElement {
                 nz === 0 ? sz - 0.4 : 0.02,
               ]}
             />
-            <meshStandardMaterial color={COLORS.boardStripe} roughness={0.6} metalness={0} />
+            <meshStandardMaterial color={pal.boardStripe} roughness={0.6} metalness={0} />
           </mesh>
         </group>
       ))}
 
-      <Stadium wallHalfX={WALL_HALF_X} wallHalfZ={WALL_HALF_Z} />
+      <Stadium wallHalfX={WALL_HALF_X} wallHalfZ={WALL_HALF_Z} standColors={pal.stands} />
+      <VenueScenery venue={venue} farSign={farSign} />
     </group>
   )
 }

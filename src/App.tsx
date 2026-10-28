@@ -34,10 +34,15 @@ import {
   playWin,
   playLose,
   playCrowdCheer,
+  startCrowdMurmur,
+  stopCrowdMurmur,
 } from './audio/sfx';
 import { announceMatch, announceScore, hushUmpire, setUmpireVoice } from './audio/umpire';
 import { cheer, resetCrowd } from './scene/crowdMood';
 import { COMPUTER_AVATAR, WALL_AVATAR, sanitizeProfile } from './game/avatar';
+import { isVenue, settleVote } from './game/venues';
+import type { Venue } from './game/venues';
+import { VoteScreen } from './ui/VoteScreen';
 import {
   inviteUrlFor,
   joinRoom,
@@ -63,6 +68,13 @@ import { EMPTY_INPUT } from './game/types';
 function calledName(profile: PlayerProfile, side: PlayerSide): string {
   return profile.name.trim() || (side === 0 ? 'Player one' : 'Player two');
 }
+
+/** How long an online venue vote stays open. */
+const VOTE_SECONDS = 15;
+/** How long the winning venue is shown before the match starts. */
+const RESULT_PAUSE_MS = 2200;
+/** The same pause for a solo pick: long enough to see it, short enough not to drag. */
+const SOLO_PAUSE_MS = 900;
 
 /** Point-ending callouts, shown briefly over the court. */
 const CALLOUTS: Record<string, string> = {
@@ -98,6 +110,8 @@ export default function App() {
   const joiningRef = useRef(false);
   const calloutTimer = useRef<number | null>(null);
   const pingTimerRef = useRef<number | null>(null);
+  /** The vote's closing timer, or the pause before the match after it. */
+  const voteTimerRef = useRef<number | null>(null);
   /** Held so a rematch can clear the AI's carried-over state. */
   const aiRef = useRef<ReturnType<typeof createAi> | null>(null);
 
@@ -197,6 +211,13 @@ export default function App() {
   const umpireVoice = useStore((s) => s.umpireVoice);
   useEffect(() => setUmpireVoice(umpireVoice), [umpireVoice]);
 
+  // The crowd murmurs through a match and its end screen, and falls quiet in
+  // the menus.
+  useEffect(() => {
+    if (screen === 'playing' || screen === 'match-over') startCrowdMurmur();
+    else stopCrowdMurmur();
+  }, [screen]);
+
   // An invite link lands here: capture the code and go straight to the name
   // prompt, so joining is one step.
   useEffect(() => {
@@ -286,6 +307,10 @@ export default function App() {
   );
 
   const teardown = useCallback(() => {
+    if (voteTimerRef.current !== null) {
+      window.clearTimeout(voteTimerRef.current);
+      voteTimerRef.current = null;
+    }
     inputRef.current?.detach();
     inputRef.current = null;
     engineRef.current = null;
@@ -377,6 +402,136 @@ export default function App() {
     setScreen('playing');
   }, [buildEngine, profile, setMode, setProfiles, setScreen, setSide]);
 
+  // --- Venue vote --------------------------------------------------------
+
+  const clearVoteTimer = useCallback(() => {
+    if (voteTimerRef.current !== null) {
+      window.clearTimeout(voteTimerRef.current);
+      voteTimerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Host: start the match at the settled venue. A rematch restarts the same
+   * engine rather than building a new one: the guest only accepts snapshots
+   * whose tick moves forward, and a fresh engine would start again from zero.
+   */
+  const launchHostedMatch = useCallback(() => {
+    if (engineRef.current && useStore.getState().mode === 'host') {
+      engineRef.current.restart();
+    } else {
+      buildEngine('authority', 0, undefined, (snapshot) => {
+        hostRef.current?.broadcast({ kind: 'snapshot', snapshot });
+      });
+    }
+    // The host does not ping: `peer.ts` answers the guest's pings inline, and
+    // the guest reports the measured round trip back in its input stream.
+    syncMatch({ scores: [0, 0], phase: 'serving', server: 0, winner: null });
+    hostRef.current?.broadcast({ kind: 'start' });
+    setScreen('playing');
+  }, [buildEngine, setScreen, syncMatch]);
+
+  /** Host: settle the vote, show the result to both players, then play. */
+  const hostSettleVote = useCallback(() => {
+    const { vote, setVote, setVenue } = useStore.getState();
+    if (vote.result) return;
+    clearVoteTimer();
+    const venue = settleVote(vote.votes);
+    setVenue(venue);
+    setVote({ result: venue });
+    hostRef.current?.broadcast({ kind: 'venue', venue });
+    voteTimerRef.current = window.setTimeout(() => {
+      voteTimerRef.current = null;
+      launchHostedMatch();
+    }, RESULT_PAUSE_MS);
+  }, [clearVoteTimer, launchHostedMatch]);
+
+  /** Host: record a vote from either side; settle once both are in. */
+  const hostCastVote = useCallback(
+    (side: PlayerSide, venue: Venue) => {
+      const { vote, screen: current, setVote } = useStore.getState();
+      if (vote.result || current !== 'vote') return;
+      const votes: [Venue | null, Venue | null] = [vote.votes[0], vote.votes[1]];
+      votes[side] = venue;
+      setVote({ votes });
+      hostRef.current?.broadcast({ kind: 'votes', votes });
+      if (votes[0] && votes[1]) hostSettleVote();
+    },
+    [hostSettleVote],
+  );
+
+  /** Host: open a vote for both players. Before every match, rematches too. */
+  const hostOpenVote = useCallback(() => {
+    clearVoteTimer();
+    useStore.getState().setVote({
+      mode: 'online',
+      solo: null,
+      votes: [null, null],
+      result: null,
+      deadline: Date.now() + VOTE_SECONDS * 1000,
+    });
+    setScreen('vote');
+    hostRef.current?.broadcast({ kind: 'vote-start', seconds: VOTE_SECONDS });
+    // Nobody is kept waiting by a player who does not vote: when time is up,
+    // the votes cast so far decide (or a random venue, if there are none).
+    voteTimerRef.current = window.setTimeout(() => {
+      voteTimerRef.current = null;
+      hostSettleVote();
+    }, VOTE_SECONDS * 1000);
+  }, [clearVoteTimer, hostSettleVote, setScreen]);
+
+  /*
+   * The network callbacks are created once, when hosting starts, so they reach
+   * the vote functions through this ref and always call the current ones.
+   */
+  const hostVote = useRef({ cast: hostCastVote, open: hostOpenVote });
+  hostVote.current = { cast: hostCastVote, open: hostOpenVote };
+
+  /** Solo games (vs the computer, practice): a vote of one, picked here. */
+  const openSoloVote = useCallback(
+    (kind: 'ai' | 'practice') => {
+      initAudio();
+      playUiClick();
+      clearVoteTimer();
+      useStore.getState().setVote({
+        mode: 'solo',
+        solo: kind,
+        votes: [null, null],
+        result: null,
+        deadline: null,
+      });
+      setScreen('vote');
+    },
+    [clearVoteTimer, setScreen],
+  );
+
+  /** This player picks a venue on the vote screen. */
+  const castVote = useCallback(
+    (venue: Venue) => {
+      const { vote, mode: currentMode, setVote, setVenue } = useStore.getState();
+      if (vote.result) return;
+      playUiClick();
+      if (vote.mode === 'solo') {
+        setVote({ votes: [venue, null], result: venue });
+        setVenue(venue);
+        voteTimerRef.current = window.setTimeout(() => {
+          voteTimerRef.current = null;
+          if (vote.solo === 'practice') startPractice();
+          else startAiMatch();
+        }, SOLO_PAUSE_MS);
+        return;
+      }
+      if (currentMode === 'host') {
+        hostCastVote(0, venue);
+        return;
+      }
+      // Guest: show our pick at once, and tell the host, who settles it.
+      setVote({ votes: [vote.votes[0], venue] });
+      guestRef.current?.send({ kind: 'vote', venue });
+    },
+    [hostCastVote, startAiMatch, startPractice],
+  );
+
   const startHosting = useCallback(async () => {
     // A second click would open a second broker peer, orphaning the first and
     // showing a room code nobody is listening on.
@@ -408,6 +563,7 @@ export default function App() {
           const engine = engineRef.current;
           if (engine) {
             engine.resetRemoteInput();
+            hostRef.current?.broadcast({ kind: 'venue', venue: useStore.getState().venue });
             hostRef.current?.broadcast({ kind: 'start' });
           }
         },
@@ -418,6 +574,15 @@ export default function App() {
           setConnection('waiting-for-rejoin');
         },
         onClientMessage: (message) => {
+          if (message.kind === 'vote') {
+            if (isVenue(message.venue)) hostVote.current.cast(1, message.venue);
+            return;
+          }
+          if (message.kind === 'rematch') {
+            // Either player can ask; the next match is voted on like the first.
+            if (useStore.getState().screen !== 'vote') hostVote.current.open();
+            return;
+          }
           const engine = engineRef.current;
           if (!engine) return;
           if (message.kind === 'input') {
@@ -428,11 +593,6 @@ export default function App() {
             // The guest measured it; the host is the one that has to act on it.
             engine.setLatency(message.rttMs);
             setLatency(message.rttMs);
-          } else if (message.kind === 'rematch') {
-            engine.restart();
-            // Put the guest back on the court too; it is driven by our
-            // snapshots and would otherwise sit on its end screen.
-            hostRef.current?.broadcast({ kind: 'start' });
           }
         },
         onError: (error) => {
@@ -457,18 +617,11 @@ export default function App() {
   ]);
 
   /** Host: begin the match and start broadcasting. */
+  /** Host: "Start match" in the lobby opens the venue vote. */
   const beginHostedMatch = useCallback(() => {
     playUiClick();
-    buildEngine('authority', 0, undefined, (snapshot) => {
-      hostRef.current?.broadcast({ kind: 'snapshot', snapshot });
-    });
-    // The host does not ping: `peer.ts` answers the guest's pings inline, and
-    // the guest reports the measured round trip back in its input stream. The
-    // fairness delay is applied in the ping handler as those arrive, rather
-    // than once here, where the latency would still be a stale zero.
-    hostRef.current?.broadcast({ kind: 'start' });
-    setScreen('playing');
-  }, [buildEngine, setScreen]);
+    hostOpenVote();
+  }, [hostOpenVote]);
 
   const joinAsGuest = useCallback(async () => {
     if (!joiningCode) return;
@@ -529,6 +682,29 @@ export default function App() {
                 winner: null,
               });
               setScreen('playing');
+              break;
+            case 'vote-start': {
+              const seconds = Math.min(60, Math.max(1, Number(message.seconds) || VOTE_SECONDS));
+              useStore.getState().setVote({
+                mode: 'online',
+                solo: null,
+                votes: [null, null],
+                result: null,
+                deadline: Date.now() + seconds * 1000,
+              });
+              setScreen('vote');
+              break;
+            }
+            case 'votes': {
+              const [a, b] = Array.isArray(message.votes) ? message.votes : [null, null];
+              useStore.getState().setVote({ votes: [isVenue(a) ? a : null, isVenue(b) ? b : null] });
+              break;
+            }
+            case 'venue':
+              if (isVenue(message.venue)) {
+                useStore.getState().setVenue(message.venue);
+                useStore.getState().setVote({ result: message.venue });
+              }
               break;
             case 'full': {
               // Someone else got the seat first (the list can lag by a moment).
@@ -615,24 +791,21 @@ export default function App() {
     useStore.getState().reset();
   }, [teardown]);
 
+  /** Rematch: every match starts with a venue vote, rematches included. */
   const rematch = useCallback(() => {
+    const currentMode = useStore.getState().mode;
+    if (currentMode === 'ai' || currentMode === 'practice') {
+      openSoloVote(currentMode);
+      return;
+    }
     playUiClick();
-    engineRef.current?.restart();
-    // The AI keeps closure state (reaction timers, its PRNG) that would
-    // otherwise carry into the new match and make its first point erratic.
-    aiRef.current?.reset();
+    if (currentMode === 'host') {
+      hostOpenVote();
+      return;
+    }
+    // Guest: ask the host, who opens the vote for both of us.
     guestRef.current?.send({ kind: 'rematch' });
-    // Clear the mirrored winner immediately. The snapshot mirror only runs a
-    // few times a second, so without this the "match is over" effect fires
-    // again before the fresh state arrives and bounces straight back here.
-    syncMatch({
-      scores: [0, 0],
-      phase: 'serving',
-      server: 0,
-      winner: null,
-    });
-    setScreen('playing');
-  }, [setScreen, syncMatch]);
+  }, [hostOpenVote, openSoloVote]);
 
   // Move to the end screen when the match is decided.
   useEffect(() => {
@@ -658,7 +831,7 @@ export default function App() {
            * reproduces them as authored.
            */
           gl={{ toneMapping: THREE.NoToneMapping, antialias: true }}
-          camera={{ fov: CAMERA_FOV, position: initialCameraPosition(side), near: 0.1, far: 200 }}
+          camera={{ fov: CAMERA_FOV, position: initialCameraPosition(side), near: 0.1, far: 400 }}
         >
           <GameScene
             engine={engineRef.current}
@@ -671,13 +844,14 @@ export default function App() {
       {screen === 'playing' && <Hud getCharge={readCharge} />}
       {screen === 'menu' && (
         <MenuScreen
-          onPlayAi={startAiMatch}
+          onPlayAi={() => openSoloVote('ai')}
           onCustomize={openCustomize}
           onJoinRoom={joinListedRoom}
           onHost={() => void startHosting()}
-          onPractice={startPractice}
+          onPractice={() => openSoloVote('practice')}
         />
       )}
+      {screen === 'vote' && <VoteScreen onVote={castVote} onLeave={exitToMenu} />}
       {screen === 'customize' && (
         <CustomizeScreen
           onDone={() => {

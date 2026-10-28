@@ -8,6 +8,7 @@
  */
 
 import type { Avatar } from './avatar';
+import type { Venue } from './venues';
 
 export type Vec3 = { x: number; y: number; z: number };
 
@@ -163,6 +164,8 @@ export type ClientMessage =
   | { kind: 'latency'; rttMs: number }
   | { kind: 'profile'; profile: PlayerProfile; role: PeerRole }
   | { kind: 'rematch' }
+  /** The guest's venue vote. */
+  | { kind: 'vote'; venue: Venue }
   /** Round-trip probe, echoed back by the host, for the latency estimate. */
   | { kind: 'ping'; sent: number };
 
@@ -176,6 +179,12 @@ export type HostMessage =
   | { kind: 'start' }
   /** The player seat is taken by someone else; the joiner is turned away. */
   | { kind: 'full' }
+  /** Venue vote opens; `seconds` until it closes. */
+  | { kind: 'vote-start'; seconds: number }
+  /** The votes so far, by side. */
+  | { kind: 'votes'; votes: [Venue | null, Venue | null] }
+  /** The venue for the match: the vote's result, or sent to a rejoiner. */
+  | { kind: 'venue'; venue: Venue }
   | { kind: 'pong'; sent: number };
 
 export type ConnectionStatus =

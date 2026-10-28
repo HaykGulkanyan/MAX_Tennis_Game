@@ -22,6 +22,22 @@ deliberate shot gives you far more control.
 
 First to 10 points wins, and you have to win by 2.
 
+## Venues
+
+Before every match, rematches included, you vote on where to play:
+
+| Venue | Court |
+| --- | --- |
+| Sunset Beach: sand, sea and palm trees | Clay |
+| Paris: the Eiffel Tower | Grass |
+| Sydney Harbour: the Opera House and the Harbour Bridge | Hard |
+
+Against the computer or in practice, you just pick one. Online, both players
+vote within 15 seconds: if you agree, that venue it is; if not, a coin flip
+picks one of the two votes. If someone does not vote in time, the votes cast
+so far decide. The venue changes only the look and the crowd's colours, never
+the rules or how the ball plays.
+
 ## Customize your player
 
 Press **Customize** on the main menu (or on the name screen when joining a

@@ -27,11 +27,13 @@ import { SHIRT_COLORS } from '../game/constants';
 import { DEFAULT_AVATAR, sanitizeProfile } from '../game/avatar';
 import type { Avatar } from '../game/avatar';
 import type { DirectoryStatus, RoomInfo } from '../net/directory';
+import type { Venue } from '../game/venues';
 
 export type UiScreen =
   | 'menu'
   | 'profile'
   | 'customize'
+  | 'vote'
   | 'lobby'
   | 'playing'
   | 'match-over';
@@ -78,6 +80,11 @@ export type StoreState = {
   /** Why joining a room failed, shown on the joining screen. */
   joinError: string | null;
 
+  /** Where the current (or next) match is played. */
+  venue: Venue;
+  /** The venue vote before a match. */
+  vote: VoteState;
+
   setScreen: (screen: UiScreen) => void;
   setMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
@@ -99,6 +106,8 @@ export type StoreState = {
   setDirectoryStatus: (status: DirectoryStatus) => void;
   setRoomPublic: (roomPublic: boolean) => void;
   setJoinError: (joinError: string | null) => void;
+  setVenue: (venue: Venue) => void;
+  setVote: (vote: Partial<VoteState>) => void;
   /** Mirror the parts of the match the HUD shows. Called at most a few Hz. */
   syncMatch: (match: {
     scores: [number, number];
@@ -107,6 +116,22 @@ export type StoreState = {
     winner: PlayerSide | null;
   }) => void;
   reset: () => void;
+};
+
+/**
+ * A venue vote. `solo` games (vs the computer, practice) are a vote of one:
+ * the pick wins at once. Online, each side votes and the host settles it.
+ */
+export type VoteState = {
+  mode: 'solo' | 'online';
+  /** What a solo vote leads into. */
+  solo: 'ai' | 'practice' | null;
+  /** Votes by side: [host or solo player, guest]. */
+  votes: [Venue | null, Venue | null];
+  /** When voting closes (this browser's clock), or null for no time limit. */
+  deadline: number | null;
+  /** The winning venue, once settled. */
+  result: Venue | null;
 };
 
 const PROFILE_KEY = 'maxtennis.profile';
@@ -165,6 +190,8 @@ const initial = {
   directoryStatus: 'connecting' as DirectoryStatus,
   roomPublic: true,
   joinError: null as string | null,
+  venue: 'sydney' as Venue,
+  vote: { mode: 'solo', solo: null, votes: [null, null], deadline: null, result: null } as VoteState,
 };
 
 export const useStore = create<StoreState>((set) => ({
@@ -211,6 +238,8 @@ export const useStore = create<StoreState>((set) => ({
   setDirectoryStatus: (directoryStatus) => set({ directoryStatus }),
   setRoomPublic: (roomPublic) => set({ roomPublic }),
   setJoinError: (joinError) => set({ joinError }),
+  setVenue: (venue) => set({ venue }),
+  setVote: (vote) => set((s) => ({ vote: { ...s.vote, ...vote } })),
   syncMatch: ({ scores, phase, server, winner }) =>
     set((s) => {
       // Avoid pointless re-renders: only write when something actually moved.
