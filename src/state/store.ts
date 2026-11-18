@@ -277,11 +277,13 @@ export const useStore = create<StoreState>((set) => ({
         winner,
       };
     }),
-  // Keep session-wide state: the voice preference and the live room list.
+  // Keep session-wide state: the chosen difficulty, the voice preference and
+  // the live room list. Leaving a match is not a reason to forget any of them.
   reset: () =>
     set((s) => ({
       ...initial,
       profile: defaultProfile(),
+      difficulty: s.difficulty,
       umpireVoice: s.umpireVoice,
       rooms: s.rooms,
       onlineCount: s.onlineCount,
