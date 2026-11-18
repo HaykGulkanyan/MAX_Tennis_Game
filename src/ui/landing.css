@@ -20,14 +20,12 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.landing h1,
-.landing h2,
-.landing h3,
-.landing p,
-.landing dl,
-.landing dd,
-.landing ol,
-.landing ul {
+/*
+ * Clear default margins with zero specificity (:where), so any class below
+ * wins over it. A plain `.landing ul` here outranked `.lp-wrap`'s centring
+ * and pinned the feature strip to the left edge.
+ */
+.landing :where(h1, h2, h3, p, dl, dd, ol, ul) {
   margin: 0;
 }
 
@@ -447,12 +445,12 @@
 }
 
 .lp-sub {
-  margin-top: 8px !important;
+  margin-top: 8px;
   color: #9aa8bf;
 }
 
 #venues .lp-sub {
-  margin-bottom: 24px !important;
+  margin-bottom: 24px;
 }
 
 #how .lp-h2 {
@@ -496,6 +494,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 24px;
+}
+
+/* The room list grows with its rooms instead of stretching to its neighbour. */
+.lp-online-grid {
+  align-items: flex-start;
 }
 
 .lp-rooms {
@@ -664,7 +667,7 @@
 }
 
 .lp-venue-name {
-  margin: 4px 0 6px !important;
+  margin: 4px 0 6px;
   font-size: 20px;
 }
 
