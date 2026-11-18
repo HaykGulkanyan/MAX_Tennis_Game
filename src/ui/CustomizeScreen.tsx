@@ -58,12 +58,11 @@ function PreviewRig({ yaw }: { yaw: React.MutableRefObject<number> }): React.Rea
   const group = useRef<THREE.Group>(null);
   const { camera } = useThree();
 
-  useFrame((state) => {
+  useFrame(() => {
     camera.lookAt(0, 0.98, 0);
     if (!group.current) return;
+    // The model plays its own idle loop; this only turns it.
     group.current.rotation.y = yaw.current;
-    // A small idle bounce on the toes, so the preview feels alive.
-    group.current.position.y = Math.abs(Math.sin(state.clock.elapsedTime * 2.2)) * 0.03;
   });
 
   return (

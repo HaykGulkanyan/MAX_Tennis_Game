@@ -18,6 +18,7 @@ import * as THREE from 'three';
 
 import { Court } from './Court';
 import { AimMarker, Ball, BallShadow, Player } from './Actors';
+import { drivePlayer, type PlayerDrive } from './PlayerModel';
 import { Engine } from '../game/engine';
 import { clampAim } from '../game/simulation';
 import type { InputController } from '../game/input';
@@ -129,6 +130,12 @@ function horizonNdcY(camera: THREE.Camera): number {
 
 const scratchHorizon = { dir: new THREE.Vector3() };
 
+function newDrive(): PlayerDrive {
+  return {
+    vx: 0, vz: 0, swingTimer: 0, ballSide: 0, ballY: 0, incoming: 0, serving: false, celebrating: false,
+  };
+}
+
 /** Reusable scratch objects, so the frame loop never allocates. */
 const scratch = {
   ray: new THREE.Raycaster(),
@@ -171,6 +178,8 @@ export function GameScene({ engine, input, side }: Props) {
     [side],
   );
   const pointerRef = useRef({ x: 0, y: 0, inside: false });
+  /** Per-player animation inputs, reused every frame. */
+  const drives = useMemo<[PlayerDrive, PlayerDrive]>(() => [newDrive(), newDrive()], []);
 
   // Track the pointer in normalised device coordinates. We raycast from this
   // each frame onto the court plane to get the aim point in world space.
@@ -238,21 +247,35 @@ export function GameScene({ engine, input, side }: Props) {
       const state = snapshot.players[i];
       group.position.set(state.position.x, 0, state.position.z);
 
-      // Swing animation. `swingTimer` counts DOWN from SWING_WINDOW, so it has
-      // to be inverted into 0..1 progress; using it raw snaps the racket to
-      // the fully wound position and then drifts back, which reads as a flinch
-      // rather than a stroke. Rotating on Y sweeps the racket across the body,
-      // which is the arc a groundstroke actually follows.
-      const racket = group.userData.racket as THREE.Object3D | undefined;
-      if (racket) {
-        const SWING_WINDOW = 0.22;
-        const remaining = Math.max(0, state.swingTimer);
-        const progress = 1 - remaining / SWING_WINDOW;
-        // Wind back, then whip through: a single smooth arc from -50 to +80
-        // degrees over the window, resting at 0 when idle.
-        racket.rotation.y =
-          remaining > 0 ? (-0.9 + progress * 2.3) : 0;
-      }
+      /*
+       * Everything else the model needs to animate itself: how fast and which
+       * way it runs, when a swing starts, which side the ball is on (forehand
+       * or backhand), and whether to get ready, serve or celebrate. Written
+       * into a reused object, so the frame loop still never allocates.
+       */
+      const drive = drives[i];
+      const b = snapshot.ball;
+      const match = snapshot.match;
+      // The model's right hand is +X in its own space; side 0 is turned round.
+      const rightSign = i === 0 ? -1 : 1;
+      // Player 0 defends -Z, so a ball coming to them travels toward -Z.
+      const towardSign = i === 0 ? -1 : 1;
+      drive.vx = state.velocity.x;
+      drive.vz = state.velocity.z;
+      drive.swingTimer = state.swingTimer;
+      drive.ballSide = (b.position.x - state.position.x) * rightSign;
+      drive.ballY = b.position.y;
+      const coming =
+        match.phase === 'rally' && !b.dead && b.lastHitBy !== null && b.lastHitBy !== i &&
+        b.velocity.z * towardSign > 0.5;
+      drive.incoming = coming
+        ? THREE.MathUtils.smoothstep(-Math.abs(b.position.z - state.position.z), -9, -2.5)
+        : 0;
+      drive.serving = match.phase === 'serving' && match.server === i;
+      drive.celebrating =
+        (match.phase === 'point-over' && match.lastPointWinner === i) ||
+        (match.phase === 'match-over' && match.winner === i);
+      drivePlayer(group, drive);
     }
 
     if (ball.current) {

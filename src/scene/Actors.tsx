@@ -16,25 +16,16 @@
  * props. There are no such props. Hold the refs, drive them per frame.
  */
 
-import { forwardRef, useCallback, useMemo, useRef } from 'react';
+import { Suspense, forwardRef, useMemo } from 'react';
 import * as THREE from 'three';
 
-import { PHYSICS, PLAYER } from '../game/constants';
+import { PHYSICS } from '../game/constants';
 import type { Avatar } from '../game/avatar';
 import type { PlayerSide } from '../game/types';
-import { Head, Shoes, TORSO_HEIGHT, Torso } from './AvatarParts';
+import { PlayerModel } from './PlayerModel';
 
 /** Regulation-ish optic yellow. */
 const BALL_COLOR = '#d8f224';
-
-/** Where the racket pivot sits relative to the body: out to the right, chest high. */
-const RACKET_PIVOT: [number, number, number] = [
-  PLAYER.radius * 0.95,
-  TORSO_HEIGHT * 0.72,
-  0,
-];
-const HANDLE_LENGTH = 0.42;
-const RACKET_HEAD_RADIUS = 0.24;
 
 type PlayerProps = {
   /** Shirt colour for this player, from SHIRT_COLORS or a profile. */
@@ -46,126 +37,33 @@ type PlayerProps = {
 };
 
 /**
- * A player avatar built from primitives only: a capsule torso wearing a
- * painted kit, a head with face and hair, shoes and a two-part racket. The
- * customisable parts live in `AvatarParts.tsx`, shared with the Customize
- * screen's preview.
+ * A player: the rigged model from public/models/player.glb (see
+ * `PlayerModel.tsx` and art/player/build_player.py).
  *
  * The forwarded ref points at the root group. The parent sets its `position`
- * each frame from the simulated player state.
+ * each frame from the simulated player state and hands the model the rest of
+ * that state with `drivePlayer(root, ...)`; the model animates itself from it.
  *
- * SWING HANDLE: the racket lives in its own nested group, and that group is
- * published on the root's `userData.racket`. So a parent holding only the root
- * ref can reach the racket without a second ref or a prop:
- *
- *   const racket = playerRef.current.userData.racket as THREE.Group | undefined;
- *   if (racket) racket.rotation.x = -swingPhase * Math.PI;
- *
- * The racket group's own origin is the grip, so rotating it swings the head
- * around the hand, which is what a swing actually looks like. `userData` is a
- * plain mutable field on Object3D, so publishing through it costs nothing and
- * survives for the lifetime of the mounted object.
+ * The model streams in after the scene first renders. Until it arrives the
+ * root group is already in place and simply empty, so nothing that holds the
+ * ref has to wait for it.
  */
 export const Player = forwardRef<THREE.Group, PlayerProps>(function Player(
   { color, avatar, side },
   ref,
 ) {
-  const racketRef = useRef<THREE.Group>(null);
-
-  /**
-   * One ref callback that both publishes the racket handle and forwards the
-   * root to the parent. Children mount before their parent's ref runs, so
-   * `racketRef` is already populated by the time this fires, and the handle is
-   * therefore in place before the parent can possibly read it. Doing it here
-   * rather than in an effect also means it is set for the very first frame.
-   */
-  const attachRoot = useCallback(
-    (group: THREE.Group | null) => {
-      if (group) group.userData.racket = racketRef.current;
-
-      if (typeof ref === 'function') ref(group);
-      else if (ref) ref.current = group;
-    },
-    [ref],
-  );
-
   /**
    * Base yaw so the avatar looks across the net. Side 0 stands at -Z and must
-   * look toward +Z, which is a half turn from the default -Z facing; side 1
+   * look toward +Z, which is a half turn from the model's -Z facing; side 1
    * already faces -Z, so it needs no turn.
    */
   const baseYaw = side === 0 ? Math.PI : 0;
 
-  /**
-   * Geometries and materials are memoised rather than declared inline, so a
-   * re-render (a colour change, a remount by the parent) reuses the same GPU
-   * resources instead of allocating a fresh set.
-   */
-  const racketMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: avatar.racket, roughness: 0.45, metalness: 0.2 }),
-    [avatar.racket],
-  );
-  /** The strings: translucent so the racket face reads as a frame, not a paddle. */
-  const stringMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: '#e8f0f5',
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      }),
-    [],
-  );
-
   return (
-    <group ref={attachRoot} rotation={[0, baseYaw, 0]}>
-      <Torso shirt={color} avatar={avatar} />
-      <Head avatar={avatar} />
-      <Shoes color={avatar.shoes} />
-
-      {/* Wristband on the racket hand, in the kit's accent colour. */}
-      {avatar.accessory === 'wristbands' ? (
-        <mesh position={RACKET_PIVOT} rotation={[0, 0, Math.PI / 2 - 0.5]}>
-          <cylinderGeometry args={[0.06, 0.06, 0.08, 12]} />
-          <meshStandardMaterial color={avatar.shirtAccent} roughness={0.8} />
-        </mesh>
-      ) : null}
-
-      {/*
-        Racket, held out to the player's right. Its group origin is the grip,
-        so a rotation here swings the head through an arc around the hand.
-      */}
-      <group ref={racketRef} position={RACKET_PIVOT} rotation={[0, 0, -0.5]}>
-        {/* Handle: a thin cylinder running outward along +X from the grip. */}
-        <mesh
-          castShadow
-          position={[HANDLE_LENGTH / 2, 0, 0]}
-          rotation={[0, 0, Math.PI / 2]}
-          material={racketMaterial}
-        >
-          <cylinderGeometry args={[0.028, 0.032, HANDLE_LENGTH, 8]} />
-        </mesh>
-
-        {/* Frame: a flat torus standing in the player's sagittal plane. */}
-        <mesh
-          castShadow
-          position={[HANDLE_LENGTH + RACKET_HEAD_RADIUS * 0.9, 0, 0]}
-          rotation={[0, Math.PI / 2, 0]}
-          material={racketMaterial}
-        >
-          <torusGeometry args={[RACKET_HEAD_RADIUS, 0.026, 6, 20]} />
-        </mesh>
-
-        {/* Strings: a circle filling the frame. No shadow, it is nearly clear. */}
-        <mesh
-          position={[HANDLE_LENGTH + RACKET_HEAD_RADIUS * 0.9, 0, 0]}
-          rotation={[0, Math.PI / 2, 0]}
-          material={stringMaterial}
-        >
-          <circleGeometry args={[RACKET_HEAD_RADIUS, 20]} />
-        </mesh>
-      </group>
+    <group ref={ref} rotation={[0, baseYaw, 0]}>
+      <Suspense fallback={null}>
+        <PlayerModel color={color} avatar={avatar} baseYaw={baseYaw} />
+      </Suspense>
     </group>
   );
 });

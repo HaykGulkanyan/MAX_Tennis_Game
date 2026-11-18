@@ -9,7 +9,7 @@
 | Networking | PeerJS (P2P over WebRTC), no backend. Host is authoritative. |
 | Gameplay | Arcade tennis |
 | Camera | Behind-player 3rd person (each player sees their own side) |
-| Visuals | Clean stylized — geometric primitives, no external model files |
+| Visuals | Clean stylized — geometric primitives for the scene; the players are one rigged, animated model built in Blender (see below) |
 | Scoring | First to 11, win by 2 |
 | Controls | WASD move, mouse aims a court marker, **LMB** = shot, **hold RMB** = charge power. Auto-swing covers you if you do not click. |
 | Extras | AI opponent, sound effects, player name + shirt colour |
@@ -137,6 +137,42 @@ simulation checks, not by a human hitting a ball. What remains:
 4. The JS bundle is ~1.2MB (324KB gzipped), mostly three.js. Fine for a game,
    but code-splitting the menu from the scene would speed first load.
 5. Push to GitHub and enable Pages (Settings > Pages > source "GitHub Actions").
+
+## Player model
+
+The players are a rigged, animated glTF model, `public/models/player.glb`,
+built **entirely by a script**: `art/player/build_player.py`. Nothing is
+modelled by hand, so to change the model you edit the script and rebuild:
+
+```
+blender -b --factory-startup --python art/player/build_player.py --     --glb public/models/player.glb --renders art/player/renders
+```
+
+(`--renders` is optional; it writes preview images and a contact sheet. It
+takes about 40 seconds on Blender 5.3.)
+
+How it is made, briefly: the body is a union of ellipsoids and tapered
+capsules fused with a voxel remesh; the shirt and shorts are shells lifted off
+the body with hems cut by planes; face parts are decals projected onto the
+head; the animations are key poses sampled per frame with IK on the feet and
+hands, so feet stay planted and both hands stay on the racket.
+
+**One file carries every look.** All hair styles, faces (brows + mouth),
+cap, headband, wristbands and sunglasses are separate parts; the game shows
+the ones a profile picked and recolours materials by name. The names are the
+contract between the script and `src/scene/PlayerModel.tsx`: rename a part or
+material in one and you must rename it in the other.
+
+The shirt print (stripes, number...) is still painted on a canvas in the game.
+The shirt's UVs are laid out for it: torso wrapped around with the front at
+u=0.5, sleeves in the top 10% of the image.
+
+Animation is driven from the simulation without React: `GameScene` writes a
+small `PlayerDrive` onto each player's root every frame (velocity, swing timer,
+which side the ball is on, whether it is incoming) and the model picks idle,
+run, forehand, backhand, serve/overhead and celebration from that. The ball is
+struck on the same tick the swing starts, so swing clips start just before
+their contact frame, and the player winds up beforehand while the ball comes.
 
 ## Physics notes worth keeping
 
