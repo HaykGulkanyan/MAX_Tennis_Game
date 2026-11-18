@@ -1,5 +1,6 @@
 /** Headless sanity checks for the tennis simulation. */
 import { createInitialSnapshot, step, resetMatch, predictPlayer } from '../src/game/simulation';
+import { gameCall, gameScore, matchCall, pointCall, pointLabel } from '../src/game/tennisScore';
 import { EMPTY_INPUT } from '../src/game/types';
 import type { GameSnapshot, PlayerInput, GameEvent } from '../src/game/types';
 import { COURT, MATCH } from '../src/game/constants';
@@ -46,7 +47,8 @@ const inp = (o: Partial<PlayerInput> = {}): PlayerInput => ({ ...EMPTY_INPUT, ..
   check('serve landed in bounds', landedInbounds === true, `inbounds=${landedInbounds}`);
   check('server (0) won the point', s.match.lastPointWinner === 0, `winner=${s.match.lastPointWinner} reason=${s.match.reason}`);
   check('score is 1-0', s.match.scores[0] === 1 && s.match.scores[1] === 0, `${s.match.scores}`);
-  check('loser (1) serves next', s.match.server === 1, `server=${s.match.server}`);
+  // Real tennis: the server keeps the serve for the whole game.
+  check('server keeps serving within the game', s.match.server === 0, `server=${s.match.server}`);
 }
 
 // --- 3. Point-over auto-resets to serving ---
@@ -151,32 +153,99 @@ const inp = (o: Partial<PlayerInput> = {}): PlayerInput => ({ ...EMPTY_INPUT, ..
   check('diagonal not faster', distB <= distA + 0.05, `axis=${distA.toFixed(2)} diag=${distB.toFixed(2)}`);
 }
 
-// --- 11. Match ends at 11 with win-by-2, and never awards past the end ---
+// --- 11/12. Tennis scoring: love-15-30-40, game, deuce, advantage, match ---
+// Each point is played out through the real simulation: the loser strikes the
+// ball long, so the point is decided by the same code as in a match.
 {
-  const s = createInitialSnapshot();
-  s.match.scores = [10, 5];
-  s.match.phase = 'rally';
-  s.ball.position = { x: 0, y: 1.5, z: 2 };
-  s.ball.velocity = { x: 0, y: 1, z: 30 }; // out -> point to side 1... wrong side
-  s.ball.lastHitBy = 1; // striker 1 hits out -> point to 0 -> 11-5 -> match over
-  for (let i = 0; i < 600 && s.match.phase === 'rally'; i++) step(s, [inp(), inp()]);
-  check('match over at 11', s.match.phase === 'match-over', `phase=${s.match.phase} score=${s.match.scores}`);
-  check('winner is side 0', s.match.winner === 0, `winner=${s.match.winner}`);
-  const scoreAfter = [...s.match.scores];
-  for (let i = 0; i < 120; i++) step(s, [inp({ shoot: true }), inp({ shoot: true })]);
-  check('score frozen after match', s.match.scores[0] === scoreAfter[0] && s.match.scores[1] === scoreAfter[1], `${s.match.scores}`);
-}
+  const names: [string, string] = ['Hayk', 'Max'];
+  const winPoint = (s: GameSnapshot, side: 0 | 1): GameEvent[] => {
+    const loser = side === 0 ? 1 : 0;
+    s.match.phase = 'rally';
+    s.ball.dead = false;
+    s.ball.bouncesSinceHit = 0;
+    s.ball.position = { x: 0, y: 1.5, z: 2 };
+    s.ball.velocity = { x: 0, y: 1, z: 30 };
+    s.ball.lastHitBy = loser;
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 600 && s.match.phase === 'rally'; i++) events.push(...step(s, [inp(), inp()]));
+    // Let the point-over pause run out, back to serving.
+    for (let i = 0; i < 400 && s.match.phase === 'point-over'; i++) step(s, [inp(), inp()]);
+    return events;
+  };
+  const labels = (s: GameSnapshot) => `${pointLabel(s.match.scores, 0)}-${pointLabel(s.match.scores, 1)}`;
 
-// --- 12. Win-by-2: 11-10 does NOT end the match ---
-{
+  // A plain game: love, 15, 30, 40, game.
   const s = createInitialSnapshot();
-  s.match.scores = [10, 10];
-  s.match.phase = 'rally';
-  s.ball.position = { x: 0, y: 1.5, z: 2 };
-  s.ball.velocity = { x: 0, y: 1, z: 30 };
-  s.ball.lastHitBy = 1;
-  for (let i = 0; i < 600 && s.match.phase === 'rally'; i++) step(s, [inp(), inp()]);
-  check('11-10 continues (deuce)', s.match.phase === 'point-over' && s.match.winner === null, `phase=${s.match.phase} score=${s.match.scores} winner=${s.match.winner}`);
+  check('new match is love-all, 0 games', labels(s) === '0-0' && s.match.games[0] === 0 && s.match.games[1] === 0, labels(s));
+  winPoint(s, 0);
+  check('first point: 15-0', labels(s) === '15-0', labels(s));
+  check('call: "Fifteen, love."', pointCall(s.match.scores, s.match.server, names) === 'Fifteen, love.', pointCall(s.match.scores, s.match.server, names));
+  winPoint(s, 1);
+  check('15 all', labels(s) === '15-15' && pointCall(s.match.scores, s.match.server, names) === 'Fifteen all.', labels(s));
+  winPoint(s, 0);
+  winPoint(s, 0);
+  check('40-15', labels(s) === '40-15', labels(s));
+  check('call: "Forty, fifteen."', pointCall(s.match.scores, s.match.server, names) === 'Forty, fifteen.');
+  const gameEvents = winPoint(s, 0);
+  const gameEvent = gameEvents.find((e) => e.type === 'game');
+  check('fourth point wins the game', s.match.games[0] === 1 && s.match.games[1] === 0, `games=${s.match.games}`);
+  check('a game event is emitted', gameEvent !== undefined && gameEvent.type === 'game' && gameEvent.winner === 0);
+  check('points reset for the next game', labels(s) === '0-0', labels(s));
+  check('serve passes to the other player after a game', s.match.server === 1, `server=${s.match.server}`);
+  check('match continues after one game', s.match.phase === 'serving' && s.match.winner === null, `phase=${s.match.phase}`);
+  check('call: "Game, Hayk. Hayk leads, one game to love."', gameCall(0, s.match.games, names) === 'Game, Hayk. Hayk leads, one game to love.', gameCall(0, s.match.games, names));
+
+  // Server's score is called first: Max serves game 2, Hayk wins the point.
+  winPoint(s, 0);
+  check('server first: "Love, fifteen." when the receiver leads', pointCall(s.match.scores, s.match.server, names) === 'Love, fifteen.', pointCall(s.match.scores, s.match.server, names));
+
+  // Deuce, and advantage back and forth as many times as it takes.
+  const d = createInitialSnapshot();
+  for (const side of [0, 1, 0, 1, 0, 1] as const) winPoint(d, side);
+  check('40-40 is deuce', gameScore(d.match.scores).kind === 'deuce' && labels(d) === '40-40', labels(d));
+  check('call: "Deuce!"', pointCall(d.match.scores, d.match.server, names) === 'Deuce!');
+  winPoint(d, 0);
+  check('advantage to the next point winner', gameScore(d.match.scores).kind === 'advantage' && labels(d) === 'AD-40', labels(d));
+  check('call: "Advantage, Hayk!"', pointCall(d.match.scores, d.match.server, names) === 'Advantage, Hayk!');
+  check('advantage is not yet a game', d.match.games[0] === 0, `games=${d.match.games}`);
+  winPoint(d, 1);
+  check('opponent wins it: back to deuce', gameScore(d.match.scores).kind === 'deuce', labels(d));
+  let bounded = true;
+  let alwaysDeuceOrAd = true;
+  for (let round = 0; round < 25; round++) {
+    winPoint(d, round % 2 === 0 ? 1 : 0);
+    if (gameScore(d.match.scores).kind !== 'advantage') alwaysDeuceOrAd = false;
+    winPoint(d, round % 2 === 0 ? 0 : 1);
+    if (gameScore(d.match.scores).kind !== 'deuce') alwaysDeuceOrAd = false;
+    if (Math.max(...d.match.scores) > 4) bounded = false;
+  }
+  check('25 more deuce/advantage swings, no game awarded', alwaysDeuceOrAd && d.match.games[0] === 0 && d.match.games[1] === 0, `games=${d.match.games} ${labels(d)}`);
+  check('point counts stay small through long deuces', bounded, `scores=${d.match.scores}`);
+  winPoint(d, 1);
+  check('advantage Max after it all', labels(d) === '40-AD' && pointCall(d.match.scores, d.match.server, names) === 'Advantage, Max!', labels(d));
+  winPoint(d, 1);
+  check('winning from advantage wins the game', d.match.games[1] === 1 && labels(d) === '0-0', `games=${d.match.games}`);
+
+  // Receiver breaks without deuce: 30-40 then the receiver wins it.
+  const r = createInitialSnapshot();
+  for (const side of [0, 1, 0, 1, 1] as const) winPoint(r, side);
+  check('30-40', labels(r) === '30-40', labels(r));
+  winPoint(r, 1);
+  check('receiver wins the game from 30-40, no deuce needed', r.match.games[1] === 1 && r.match.games[0] === 0, `games=${r.match.games}`);
+
+  // The match: first to MATCH.gamesToWin games, then frozen.
+  const m = createInitialSnapshot();
+  let matchEvents: GameEvent[] = [];
+  for (let g = 0; g < MATCH.gamesToWin; g++) {
+    for (let p = 0; p < 4; p++) matchEvents = winPoint(m, 0);
+  }
+  check(`match over at ${MATCH.gamesToWin} games`, m.match.phase === 'match-over' && m.match.winner === 0, `phase=${m.match.phase} games=${m.match.games}`);
+  check('last point emits score, game and match-over', ['score', 'game', 'match-over'].every((t) => matchEvents.some((e) => e.type === t)), matchEvents.map((e) => e.type).join(','));
+  check('call: "Game, set and match, Hayk!"', matchCall(0, names) === 'Game, set and match, Hayk!');
+  const gamesAfter = [...m.match.games];
+  for (let i = 0; i < 120; i++) step(m, [inp({ shoot: true }), inp({ shoot: true })]);
+  check('score frozen after match', m.match.games[0] === gamesAfter[0] && m.match.games[1] === gamesAfter[1], `${m.match.games}`);
+  check('games call when level: "Game, Max. One game all."', gameCall(1, [1, 1], names) === 'Game, Max. One game all.', gameCall(1, [1, 1], names));
 }
 
 // --- 13. Returning the ball works: opponent auto-swings and sends it back ---
@@ -231,11 +300,12 @@ const inp = (o: Partial<PlayerInput> = {}): PlayerInput => ({ ...EMPTY_INPUT, ..
 // --- 15. resetMatch clears everything ---
 {
   const s = createInitialSnapshot();
-  s.match.scores = [7, 3];
+  s.match.scores = [2, 1];
+  s.match.games = [2, 1];
   s.match.phase = 'match-over';
   s.match.winner = 1;
   resetMatch(s);
-  check('resetMatch clears score', s.match.scores[0] === 0 && s.match.scores[1] === 0);
+  check('resetMatch clears score', s.match.scores[0] === 0 && s.match.scores[1] === 0 && s.match.games[0] === 0 && s.match.games[1] === 0);
   check('resetMatch clears winner', s.match.winner === null);
   check('resetMatch back to serving', s.match.phase === 'serving');
 }
@@ -271,7 +341,8 @@ const inp = (o: Partial<PlayerInput> = {}): PlayerInput => ({ ...EMPTY_INPUT, ..
   const nums = JSON.stringify(s).match(/-?\d+\.?\d*(e-?\d+)?/g) ?? [];
   const bad = JSON.stringify(s).includes('null,null') || /NaN|Infinity/.test(JSON.stringify(s));
   check('no NaN/Infinity after 5000 ticks', !bad);
-  check('match progressed over long run', s.match.scores[0] + s.match.scores[1] > 0, `score=${s.match.scores}`);
+  const played = s.match.scores[0] + s.match.scores[1] + s.match.games[0] + s.match.games[1];
+  check('match progressed over long run', played > 0, `points=${s.match.scores} games=${s.match.games}`);
 }
 
 // --- 18. Shots land near where they are aimed (the aiming promise) ---

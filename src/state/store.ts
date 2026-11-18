@@ -60,7 +60,10 @@ export type StoreState = {
   latencyMs: number;
 
   // --- Low-frequency mirror of the match, for the HUD only. ---
+  /** Points in the current game (0-3 = love-40; deuce/advantage beyond). */
   scores: [number, number];
+  /** Games won. */
+  games: [number, number];
   phase: RallyPhase;
   /** Which side is serving, so the HUD can say whose serve it is. */
   server: PlayerSide;
@@ -109,8 +112,14 @@ export type StoreState = {
   setVenue: (venue: Venue) => void;
   setVote: (vote: Partial<VoteState>) => void;
   /** Mirror the parts of the match the HUD shows. Called at most a few Hz. */
+  /**
+   * Update the scoreboard the moment a point or game is won, rather than on
+   * the next periodic mirror, so the board changes as the umpire calls it.
+   */
+  setScore: (scores: [number, number], games?: [number, number]) => void;
   syncMatch: (match: {
     scores: [number, number];
+    games: [number, number];
     phase: RallyPhase;
     server: PlayerSide;
     winner: PlayerSide | null;
@@ -180,6 +189,7 @@ const initial = {
   roomCode: null as string | null,
   latencyMs: 0,
   scores: [0, 0] as [number, number],
+  games: [0, 0] as [number, number],
   phase: 'serving' as RallyPhase,
   server: 0 as PlayerSide,
   callout: null as string | null,
@@ -240,19 +250,32 @@ export const useStore = create<StoreState>((set) => ({
   setJoinError: (joinError) => set({ joinError }),
   setVenue: (venue) => set({ venue }),
   setVote: (vote) => set((s) => ({ vote: { ...s.vote, ...vote } })),
-  syncMatch: ({ scores, phase, server, winner }) =>
+  setScore: (scores, games) =>
+    set((s) => ({
+      scores: [scores[0], scores[1]],
+      games: games ? [games[0], games[1]] : s.games,
+    })),
+  syncMatch: ({ scores, games, phase, server, winner }) =>
     set((s) => {
       // Avoid pointless re-renders: only write when something actually moved.
       if (
         s.scores[0] === scores[0] &&
         s.scores[1] === scores[1] &&
+        s.games[0] === games[0] &&
+        s.games[1] === games[1] &&
         s.phase === phase &&
         s.server === server &&
         s.winner === winner
       ) {
         return s;
       }
-      return { scores: [scores[0], scores[1]], phase, server, winner };
+      return {
+        scores: [scores[0], scores[1]],
+        games: [games[0], games[1]],
+        phase,
+        server,
+        winner,
+      };
     }),
   // Keep session-wide state: the voice preference and the live room list.
   reset: () =>

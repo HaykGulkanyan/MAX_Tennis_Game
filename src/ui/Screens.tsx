@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CameraMode, Difficulty, PlayerProfile, PlayerSide } from '../game/types';
 import { CAMERA_MODES, CAMERA_MODE_LABELS } from '../game/types';
 import { MATCH, SHIRT_COLORS } from '../game/constants';
+import { gameScore, pointLabel } from '../game/tennisScore';
 import { useStore } from '../state/store';
 import { inviteUrlFor } from '../net/peer';
 import './ui.css';
@@ -181,7 +182,10 @@ export function MenuScreen(props: {
           </div>
           <div className="howto-row">
             <dt>Scoring</dt>
-            <dd>First to {MATCH.pointsToWin}, win by 2</dd>
+            <dd>
+              Real tennis: 15, 30, 40, deuce and advantage. First to {MATCH.gamesToWin} games
+              wins.
+            </dd>
           </div>
         </dl>
         <p className="howto-tip">
@@ -506,12 +510,24 @@ export function LobbyScreen(props: {
 
 // --- HUD ----------------------------------------------------------------
 
+/** A small tennis ball beside whoever is serving the current game. */
+function ServeMarker({ show }: { show: boolean }): React.ReactElement {
+  return (
+    <span
+      className={show ? 'serve-marker is-serving' : 'serve-marker'}
+      title={show ? 'Serving' : undefined}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function Hud(props: {
   /** Reads this player's shot charge, 0..1. Omitted for a spectator. */
   getCharge?: () => number;
 }): React.ReactElement {
   const profiles = useStore((s) => s.profiles);
   const scores = useStore((s) => s.scores);
+  const games = useStore((s) => s.games);
   const phase = useStore((s) => s.phase);
   const server = useStore((s) => s.server);
   const callout = useStore((s) => s.callout);
@@ -529,7 +545,10 @@ export function Hud(props: {
 
   return (
     <div className="hud" aria-live="polite">
-      <div className="scoreboard">
+      <div
+        className="scoreboard"
+        aria-label={`Games ${games[0]} to ${games[1]}; points ${pointLabel(scores, 0)} to ${pointLabel(scores, 1)}`}
+      >
         <div className="score-side">
           <span
             className="score-dot"
@@ -537,13 +556,17 @@ export function Hud(props: {
             aria-hidden="true"
           />
           <span className="score-name">{displayName(profiles[0], 0)}</span>
-          <span className="score-value">{scores[0]}</span>
+          <ServeMarker show={server === 0} />
+          <span className="score-games" title="Games">{games[0]}</span>
+          <span className="score-value">{pointLabel(scores, 0)}</span>
         </div>
         <span className="score-sep" aria-hidden="true">
-          :
+          {gameScore(scores).kind === 'deuce' ? <span className="score-deuce">DEUCE</span> : ':'}
         </span>
         <div className="score-side score-side-right">
-          <span className="score-value">{scores[1]}</span>
+          <span className="score-value">{pointLabel(scores, 1)}</span>
+          <span className="score-games" title="Games">{games[1]}</span>
+          <ServeMarker show={server === 1} />
           <span className="score-name">{displayName(profiles[1], 1)}</span>
           <span
             className="score-dot"
@@ -609,7 +632,7 @@ export function MatchOverScreen(props: {
 }): React.ReactElement {
   const winner = useStore((s) => s.winner);
   const profiles = useStore((s) => s.profiles);
-  const scores = useStore((s) => s.scores);
+  const games = useStore((s) => s.games);
   const side = useStore((s) => s.side);
 
   const youWon = winner !== null && winner === side;
@@ -634,7 +657,7 @@ export function MatchOverScreen(props: {
             aria-hidden="true"
           />
           <span className="final-name">{displayName(profiles[0], 0)}</span>
-          <span className="final-value">{scores[0]}</span>
+          <span className="final-value">{games[0]}</span>
         </div>
         <div className="final-side">
           <span
@@ -643,7 +666,7 @@ export function MatchOverScreen(props: {
             aria-hidden="true"
           />
           <span className="final-name">{displayName(profiles[1], 1)}</span>
-          <span className="final-value">{scores[1]}</span>
+          <span className="final-value">{games[1]}</span>
         </div>
       </div>
 

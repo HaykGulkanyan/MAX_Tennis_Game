@@ -417,6 +417,7 @@ export function GameScene({ engine, input, side }: Props) {
       lastSync.current = 0;
       syncMatch({
         scores: snapshot.match.scores,
+        games: snapshot.match.games,
         phase: snapshot.match.phase,
         server: snapshot.match.server,
         winner: snapshot.match.winner,

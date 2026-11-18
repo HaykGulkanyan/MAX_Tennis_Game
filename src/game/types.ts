@@ -105,7 +105,10 @@ export type PointReason =
   | null;
 
 export type MatchState = {
+  /** Points in the current game, per side: 0, 1, 2, 3 = love, 15, 30, 40. */
   scores: [number, number];
+  /** Games won, per side. */
+  games: [number, number];
   /** Which side serves the current point. */
   server: PlayerSide;
   phase: RallyPhase;
@@ -144,7 +147,10 @@ export type GameEvent =
   | { type: 'bounce'; position: Vec3 }
   | { type: 'net' }
   | { type: 'out' }
-  | { type: 'score'; scores: [number, number] }
+  /** A point was won. `scores` are the game's points after it; `server` served this game. */
+  | { type: 'score'; scores: [number, number]; server: PlayerSide }
+  /** A game was won; `games` is the games score after it. */
+  | { type: 'game'; winner: PlayerSide; games: [number, number] }
   | { type: 'match-over'; winner: PlayerSide };
 
 /**

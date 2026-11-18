@@ -37,7 +37,7 @@ import {
   startCrowdMurmur,
   stopCrowdMurmur,
 } from './audio/sfx';
-import { announceMatch, announceScore, hushUmpire, setUmpireVoice } from './audio/umpire';
+import { announceGame, announceMatch, announcePoint, hushUmpire, setUmpireVoice } from './audio/umpire';
 import { cheer, resetCrowd } from './scene/crowdMood';
 import { COMPUTER_AVATAR, WALL_AVATAR, sanitizeProfile } from './game/avatar';
 import { isVenue, settleVote } from './game/venues';
@@ -66,7 +66,7 @@ import { EMPTY_INPUT } from './game/types';
 
 /** The name the umpire uses for a side; falls back when a name was left blank. */
 function calledName(profile: PlayerProfile, side: PlayerSide): string {
-  return profile.name.trim() || (side === 0 ? 'Player one' : 'Player two');
+  return profile.name.trim() || (side === 0 ? 'Player One' : 'Player Two');
 }
 
 /** How long an online venue vote stays open. */
@@ -259,9 +259,12 @@ export default function App() {
         calledName(profiles[0], 0),
         calledName(profiles[1], 1),
       ];
-      // The final point arrives together with 'match-over'; the umpire calls
-      // the match then, instead of a score nobody will play on from.
+      // A point that wins a game arrives with a 'game' event, and the last one
+      // with 'match-over' too. The umpire makes one call per point: the match,
+      // else the game, else the score in the game.
       const matchEnds = events.some((e) => e.type === 'match-over');
+      const gameEnds = events.some((e) => e.type === 'game');
+      const setScore = useStore.getState().setScore;
       for (const event of events) {
         switch (event.type) {
           case 'hit':
@@ -286,10 +289,21 @@ export default function App() {
             break;
           case 'score':
             playScore();
-            if (!matchEnds) {
+            if (!gameEnds) {
+              setScore(event.scores);
               cheer(1);
               playCrowdCheer(1);
-              announceScore(event.scores, names, pointReason.current);
+              announcePoint(event.scores, event.server, names, pointReason.current);
+              pointReason.current = null;
+            }
+            break;
+          case 'game':
+            // The board shows the new games score and a fresh game at once.
+            setScore([0, 0], event.games);
+            if (!matchEnds) {
+              cheer(1.2);
+              playCrowdCheer(1.2);
+              announceGame(event.winner, event.games, names, pointReason.current);
             }
             pointReason.current = null;
             break;
@@ -298,7 +312,8 @@ export default function App() {
             else playLose();
             cheer(1.5);
             playCrowdCheer(1.5);
-            announceMatch(names[event.winner]);
+            announceMatch(event.winner, names);
+            pointReason.current = null;
             break;
         }
       }
@@ -426,7 +441,7 @@ export default function App() {
     }
     // The host does not ping: `peer.ts` answers the guest's pings inline, and
     // the guest reports the measured round trip back in its input stream.
-    syncMatch({ scores: [0, 0], phase: 'serving', server: 0, winner: null });
+    syncMatch({ scores: [0, 0], games: [0, 0], phase: 'serving', server: 0, winner: null });
     hostRef.current?.broadcast({ kind: 'start' });
     setScreen('playing');
   }, [buildEngine, setScreen, syncMatch]);
@@ -677,6 +692,7 @@ export default function App() {
               // match-over effect fires again immediately.
               syncMatch({
                 scores: [0, 0],
+                games: [0, 0],
                 phase: 'serving',
                 server: 0,
                 winner: null,

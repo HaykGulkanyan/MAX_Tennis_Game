@@ -126,8 +126,12 @@ export const SHOT = {
 } as const;
 
 export const MATCH = {
-  /** First to this many points wins, but must win by 2. */
-  pointsToWin: 10,
+  /**
+   * Games needed to win the match. Within a game, scoring is real tennis
+   * (love, 15, 30, 40, deuce, advantage; see game/tennisScore.ts). First to 3
+   * games keeps a match about as long as the old first-to-10-points one.
+   */
+  gamesToWin: 3,
   /** Seconds between a point ending and the next serve. */
   pointResetDelay: 1.6,
 } as const;

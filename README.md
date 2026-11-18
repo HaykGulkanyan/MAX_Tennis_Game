@@ -20,7 +20,20 @@ Where you point the marker is where the ball is headed, so aiming matters as muc
 as timing. If you do not click in time, an auto-swing covers you, though a
 deliberate shot gives you far more control.
 
-First to 10 points wins, and you have to win by 2.
+### Scoring
+
+Real tennis scoring. Within a game, points go love, 15, 30, 40, then game.
+At 40-40 it is **deuce**; the next point gives that player the **advantage**,
+and winning the point after that wins the game, while losing it goes back to
+deuce, as many times as it takes. One player serves a whole game and the serve
+alternates each game. The first player to win **3 games** wins the match.
+
+The chair umpire calls every point the way it is called at a Grand Slam,
+server's score first: "Fifteen, love.", "Thirty all.", "Deuce!",
+"Advantage, Hayk!", "Game, Hayk. Hayk leads, two games to one.",
+"Game, set and match, Hayk!". The voice is the best one installed on your
+device: a natural-sounding British male voice where there is one (Edge's
+"Microsoft Ryan", Chrome's "Google UK English Male", the Mac's "Daniel").
 
 ## Venues
 

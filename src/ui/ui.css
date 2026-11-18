@@ -1301,3 +1301,47 @@ kbd {
     padding-bottom: 10px;
   }
 }
+
+/* ----------------------------------------------------------------
+ * Tennis scoreboard: games box, point (0/15/30/40/AD), server ball
+ * ---------------------------------------------------------------- */
+
+.score-games {
+  min-width: 1.6em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: clamp(0.85rem, 2.6vw, 1.05rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+/* Room for "40" and "AD" without the board changing width. */
+.score-value {
+  min-width: 1.7em;
+  text-align: center;
+}
+
+.serve-marker {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.serve-marker.is-serving {
+  background: #d8f224;
+  box-shadow: 0 0 6px rgba(216, 242, 36, 0.7);
+}
+
+.score-deuce {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--accent-ink);
+  background: #f0b429;
+}

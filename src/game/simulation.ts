@@ -6,6 +6,7 @@
  */
 
 import { COURT, MATCH, NET, PHYSICS, PLAYER, SHOT, TICK } from './constants';
+import { normaliseDeuce, wonGame } from './tennisScore';
 import type {
   BallState,
   GameEvent,
@@ -62,6 +63,7 @@ export function createInitialSnapshot(): GameSnapshot {
     },
     match: {
       scores: [0, 0],
+      games: [0, 0],
       server: 0,
       phase: 'serving',
       reason: null,
@@ -111,6 +113,7 @@ function resetForNextPoint(snapshot: GameSnapshot): void {
 
 export function resetMatch(snapshot: GameSnapshot): void {
   snapshot.match.scores = [0, 0];
+  snapshot.match.games = [0, 0];
   snapshot.match.server = 0;
   snapshot.match.winner = null;
   snapshot.match.lastPointWinner = null;
@@ -118,12 +121,6 @@ export function resetMatch(snapshot: GameSnapshot): void {
   resetForNextPoint(snapshot);
 }
 
-/** True once a side has enough points to take the match (first to N, win by 2). */
-function isMatchPoint(scores: [number, number], side: PlayerSide): boolean {
-  const mine = scores[side];
-  const theirs = scores[side === 0 ? 1 : 0];
-  return mine >= MATCH.pointsToWin && mine - theirs >= 2;
-}
 
 function awardPoint(
   snapshot: GameSnapshot,
@@ -141,20 +138,36 @@ function awardPoint(
   match.lastPointWinner = winner;
   match.reason = reason;
   snapshot.ball.dead = true;
-  events.push({ type: 'score', scores: [...match.scores] as [number, number] });
 
-  if (isMatchPoint(match.scores, winner)) {
-    match.phase = 'match-over';
-    match.winner = winner;
-    events.push({ type: 'match-over', winner });
-    return;
+  /*
+   * Tennis scoring. A game needs four points and a two-point lead; until then
+   * the score may go to deuce and advantage and back any number of times.
+   * The 'score' event carries the points as they stand after this point, so
+   * the umpire can call "Deuce!" or "Advantage"; on a game point it carries
+   * the winning count, followed by a 'game' event.
+   */
+  const gameWon = wonGame(match.scores, winner);
+  if (!gameWon) normaliseDeuce(match.scores);
+  events.push({ type: 'score', scores: [...match.scores] as [number, number], server: match.server });
+
+  if (gameWon) {
+    match.games[winner] += 1;
+    match.scores = [0, 0];
+    events.push({ type: 'game', winner, games: [...match.games] as [number, number] });
+
+    if (match.games[winner] >= MATCH.gamesToWin) {
+      match.phase = 'match-over';
+      match.winner = winner;
+      events.push({ type: 'match-over', winner });
+      return;
+    }
+    // As in real tennis, one player serves a whole game and the serve
+    // alternates game by game.
+    match.server = match.server === 0 ? 1 : 0;
   }
 
   match.phase = 'point-over';
   match.resetTimer = MATCH.pointResetDelay;
-  // Loser of the point serves next, which keeps the game flowing without
-  // anyone having to track a rotation.
-  match.server = winner === 0 ? 1 : 0;
 }
 
 /** Clamp a player inside the playfield (court plus runoff, own half only). */
