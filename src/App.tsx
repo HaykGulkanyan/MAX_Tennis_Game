@@ -16,7 +16,6 @@ import {
   Hud,
   LobbyScreen,
   MatchOverScreen,
-  MenuScreen,
   ProfileScreen,
   UnsupportedScreen,
 } from './ui/Screens';
@@ -43,6 +42,7 @@ import { COMPUTER_AVATAR, WALL_AVATAR, sanitizeProfile } from './game/avatar';
 import { isVenue, settleVote } from './game/venues';
 import type { Venue } from './game/venues';
 import { VoteScreen } from './ui/VoteScreen';
+import { LandingScreen } from './ui/LandingScreen';
 import {
   inviteUrlFor,
   joinRoom,
@@ -859,7 +859,7 @@ export default function App() {
 
       {screen === 'playing' && <Hud getCharge={readCharge} />}
       {screen === 'menu' && (
-        <MenuScreen
+        <LandingScreen
           onPlayAi={() => openSoloVote('ai')}
           onCustomize={openCustomize}
           onJoinRoom={joinListedRoom}

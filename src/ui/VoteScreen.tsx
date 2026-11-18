@@ -93,7 +93,8 @@ function SydneyArt(): React.ReactElement {
   );
 }
 
-const ART: Record<Venue, () => React.ReactElement> = {
+/** The venue pictures; also shown on the landing page. */
+export const ART: Record<Venue, () => React.ReactElement> = {
   beach: BeachArt,
   paris: ParisArt,
   sydney: SydneyArt,

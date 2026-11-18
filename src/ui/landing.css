@@ -1,0 +1,804 @@
+/*
+ * Landing page (main menu).
+ *
+ * A scrolling page of its own: it sits over the app like every other screen
+ * (fixed, full window) but scrolls top to bottom instead of centring a panel.
+ * Colours come from the tokens in ui.css; every grey used for text passes
+ * 4.5:1 on its background.
+ */
+
+.landing {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  background: #0b1220;
+  color: var(--text);
+  font-family: 'Inter', var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.landing h1,
+.landing h2,
+.landing h3,
+.landing p,
+.landing dl,
+.landing dd,
+.landing ol,
+.landing ul {
+  margin: 0;
+}
+
+.landing a:focus-visible,
+.landing button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.lp-wrap {
+  box-sizing: border-box;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+/* --- Buttons ------------------------------------------------------------ */
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    filter 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.lp-btn:active {
+  transform: translateY(1px);
+}
+
+.lp-btn-accent {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.lp-btn-accent:hover {
+  filter: brightness(1.08);
+}
+
+.lp-btn-blue {
+  background: #2f7fe8;
+  color: #ffffff;
+}
+
+.lp-btn-blue:hover {
+  background: #3d8bf0;
+}
+
+.lp-btn-outline {
+  min-height: 44px;
+  background: transparent;
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+  font-weight: 600;
+}
+
+.lp-btn-outline:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Top bar ------------------------------------------------------------ */
+
+.lp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(11, 18, 32, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 28px;
+  padding-block: 12px;
+}
+
+.lp-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-family: 'Space Grotesk', var(--font);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.lp-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 22px;
+  flex: 1 1 auto;
+}
+
+.lp-nav-links a {
+  padding: 10px 0;
+  color: #c3cede;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.lp-nav-links a:hover {
+  color: var(--text);
+}
+
+.lp-nav-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lp-player-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 220px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lp-player-avatar,
+.lp-room-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.lp-player-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+/* --- Hero --------------------------------------------------------------- */
+
+.lp-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 48px;
+  padding-block: 64px 56px;
+  scroll-margin-top: 72px;
+}
+
+.lp-hero-copy {
+  flex: 1 1 460px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.lp-eyebrow {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(200, 242, 74, 0.12);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lp-title {
+  font-family: 'Space Grotesk', var(--font);
+  font-size: clamp(2.6rem, 5.4vw, 4.4rem);
+  line-height: 1.02;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.lp-lead {
+  max-width: 34em;
+  font-size: 18px;
+  color: #b6c2d4;
+}
+
+.lp-card {
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: #131c2d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lp-play-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.lp-diff-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lp-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b6c2d4;
+}
+
+.lp-segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-segmented button {
+  min-height: 40px;
+  min-width: 84px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #c3cede;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lp-segmented button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lp-segmented button.is-on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.lp-btn-hero {
+  min-height: 56px;
+  font-size: 18px;
+}
+
+.lp-note {
+  font-size: 14px;
+  color: #9aa8bf;
+}
+
+.lp-hero-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lp-hero-more > .lp-btn-blue {
+  flex: 1 1 200px;
+}
+
+.lp-hero-more > .lp-btn-outline {
+  flex: 1 1 160px;
+  min-height: 52px;
+}
+
+.lp-hero-art {
+  position: relative;
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+.lp-court {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lp-score-chip {
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(7, 12, 22, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.lp-score-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  color: #c3cede;
+}
+
+.lp-score-games {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+}
+
+.lp-score-pts {
+  font-family: 'Space Grotesk', var(--font);
+  font-size: 20px;
+}
+
+.lp-score-deuce {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f0b429;
+  color: var(--accent-ink);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+/* --- Feature strip ------------------------------------------------------ */
+
+.lp-features {
+  background: #0e1626;
+  border-block: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-feature-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+  padding-block: 28px;
+}
+
+.lp-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.lp-feature-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.lp-feature-title {
+  display: block;
+  font-weight: 700;
+}
+
+.lp-feature-text {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: #9aa8bf;
+}
+
+/* --- Sections ----------------------------------------------------------- */
+
+.lp-section {
+  padding-block: 64px 8px;
+  /* Land below the sticky top bar when jumped to. */
+  scroll-margin-top: 72px;
+}
+
+.lp-section-last {
+  padding-bottom: 80px;
+}
+
+.lp-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.lp-h2 {
+  font-family: 'Space Grotesk', var(--font);
+  font-size: 36px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.lp-sub {
+  margin-top: 8px !important;
+  color: #9aa8bf;
+}
+
+#venues .lp-sub {
+  margin-bottom: 24px !important;
+}
+
+#how .lp-h2 {
+  margin-bottom: 24px;
+}
+
+.lp-h3 {
+  font-family: 'Space Grotesk', var(--font);
+  font-size: 22px;
+}
+
+.lp-body {
+  font-size: 15px;
+  color: #b6c2d4;
+}
+
+/* --- Online ------------------------------------------------------------- */
+
+.lp-online {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #c3cede;
+}
+
+.lp-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #8592a8;
+}
+
+.lp-dot.is-ok {
+  background: var(--ok);
+}
+
+.lp-online-grid,
+.lp-how-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.lp-rooms {
+  flex: 999 1 520px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.lp-room-list {
+  list-style: none;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.lp-room {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lp-room-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.lp-room-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lp-room-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-room-meta {
+  font-size: 13px;
+  color: #9aa8bf;
+}
+
+.lp-btn-join {
+  flex: none;
+  min-height: 44px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+
+.lp-rooms-empty {
+  padding: 28px 12px 12px;
+  color: #b6c2d4;
+}
+
+.lp-rooms-note {
+  padding: 12px;
+  font-size: 13px;
+  color: #9aa8bf;
+}
+
+.lp-open-room {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+}
+
+.lp-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lp-switch.is-on {
+  border-color: rgba(200, 242, 74, 0.45);
+  background: rgba(200, 242, 74, 0.08);
+}
+
+.lp-switch-track {
+  flex: none;
+  box-sizing: border-box;
+  width: 40px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #33405a;
+  display: flex;
+  justify-content: flex-start;
+  transition: background-color 150ms ease;
+}
+
+.lp-switch.is-on .lp-switch-track {
+  background: var(--accent);
+  justify-content: flex-end;
+}
+
+.lp-switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c3cede;
+}
+
+.lp-switch.is-on .lp-switch-thumb {
+  background: var(--accent-ink);
+}
+
+.lp-switch-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.lp-switch-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lp-switch-note {
+  font-size: 13px;
+  color: #b6c2d4;
+}
+
+/* --- Venues ------------------------------------------------------------- */
+
+.lp-venues {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.lp-venue {
+  overflow: hidden;
+}
+
+.lp-venue svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lp-venue-body {
+  padding: 16px 18px 20px;
+}
+
+.lp-venue-surface {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lp-venue-name {
+  margin: 4px 0 6px !important;
+  font-size: 20px;
+}
+
+.lp-venue-blurb {
+  font-size: 14px;
+  color: #9aa8bf;
+}
+
+/* --- How to play -------------------------------------------------------- */
+
+.lp-controls {
+  flex: 999 1 520px;
+  min-width: 0;
+  padding: 8px 24px;
+}
+
+.lp-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lp-control:last-child {
+  border-bottom: 0;
+}
+
+.lp-control dt {
+  display: flex;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.lp-control dd {
+  color: #c3cede;
+}
+
+.lp-kbd {
+  min-width: 32px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom-width: 3px;
+  font-family: 'Inter', var(--font);
+  font-weight: 700;
+  text-align: center;
+}
+
+.lp-scoring {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+}
+
+.lp-points {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lp-points li {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 700;
+}
+
+.lp-points li.is-game {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* --- Footer ------------------------------------------------------------- */
+
+.lp-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 24px;
+  font-size: 14px;
+  color: #9aa8bf;
+}
+
+.lp-footer-row a {
+  color: var(--accent);
+}
+
+/* --- Small screens ------------------------------------------------------ */
+
+@media (max-width: 640px) {
+  .lp-hero {
+    padding-block: 36px 40px;
+    gap: 32px;
+  }
+  .lp-nav-links {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .lp-segmented {
+    flex: 1 1 100%;
+  }
+  .lp-segmented button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .lp-score-chip {
+    gap: 8px;
+    padding: 6px 12px;
+  }
+  .lp-score-name {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-btn,
+  .lp-switch-track {
+    transition: none;
+  }
+}

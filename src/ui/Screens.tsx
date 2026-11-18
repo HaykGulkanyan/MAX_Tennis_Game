@@ -15,19 +15,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CameraMode, Difficulty, PlayerProfile, PlayerSide } from '../game/types';
+import type { CameraMode, PlayerProfile, PlayerSide } from '../game/types';
 import { CAMERA_MODES, CAMERA_MODE_LABELS } from '../game/types';
-import { MATCH, SHIRT_COLORS } from '../game/constants';
+import { SHIRT_COLORS } from '../game/constants';
 import { gameScore, pointLabel } from '../game/tennisScore';
 import { useStore } from '../state/store';
 import { inviteUrlFor } from '../net/peer';
 import './ui.css';
-
-const DIFFICULTIES: readonly { value: Difficulty; label: string }[] = [
-  { value: 'easy', label: 'Easy' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'hard', label: 'Hard' },
-];
 
 /** A player's name with a sensible stand-in before they have entered one. */
 function displayName(profile: PlayerProfile, side: PlayerSide): string {
@@ -79,183 +73,6 @@ function PlayerChip(props: {
       </span>
       {props.you === true ? <span className="chip-you">you</span> : null}
     </div>
-  );
-}
-
-// --- Menu ---------------------------------------------------------------
-
-export function MenuScreen(props: {
-  onPlayAi: () => void;
-  onHost: () => void;
-  onPractice: () => void;
-  onCustomize: () => void;
-  onJoinRoom: (code: string) => void;
-}): React.ReactElement {
-  const difficulty = useStore((s) => s.difficulty);
-  const setDifficulty = useStore((s) => s.setDifficulty);
-
-  return (
-    <ScreenShell wide>
-      <header className="brand">
-        <h1 className="brand-title">MAX Tennis</h1>
-        <p className="brand-sub">Fast arcade tennis in your browser</p>
-      </header>
-
-      <div className="menu-actions">
-        <section className="menu-card">
-          <button type="button" className="btn btn-primary" onClick={props.onPlayAi}>
-            Play vs Computer
-          </button>
-          <div
-            className="difficulty"
-            role="radiogroup"
-            aria-label="Computer difficulty"
-          >
-            {DIFFICULTIES.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={difficulty === option.value}
-                className={
-                  difficulty === option.value
-                    ? 'btn btn-chip btn-chip-on'
-                    : 'btn btn-chip'
-                }
-                onClick={() => setDifficulty(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="menu-card">
-          <button type="button" className="btn btn-secondary" onClick={props.onHost}>
-            Play with a Friend
-          </button>
-          <p className="menu-note">
-            Opens a room everyone online can see, plus a link to send a friend.
-          </p>
-        </section>
-
-        <section className="menu-card">
-          <button type="button" className="btn btn-secondary" onClick={props.onPractice}>
-            Practice
-          </button>
-          <p className="menu-note">Solo rally against a wall; no score.</p>
-        </section>
-
-        <section className="menu-card">
-          <button type="button" className="btn btn-secondary" onClick={props.onCustomize}>
-            Customize
-          </button>
-          <p className="menu-note">Hair, face, shirt, shoes and more.</p>
-        </section>
-      </div>
-
-      <OnlineRooms onJoin={props.onJoinRoom} />
-
-      <section className="howto">
-        <h2 className="howto-title">How to play</h2>
-        <dl className="howto-list">
-          <div className="howto-row">
-            <dt>
-              <kbd>W</kbd>
-              <kbd>A</kbd>
-              <kbd>S</kbd>
-              <kbd>D</kbd>
-            </dt>
-            <dd>Move around the court</dd>
-          </div>
-          <div className="howto-row">
-            <dt>Mouse</dt>
-            <dd>Aim where the ball should land</dd>
-          </div>
-          <div className="howto-row">
-            <dt>Left click</dt>
-            <dd>Hit the ball</dd>
-          </div>
-          <div className="howto-row">
-            <dt>Hold right click</dt>
-            <dd>Charge power, then release to fire</dd>
-          </div>
-          <div className="howto-row">
-            <dt>Scoring</dt>
-            <dd>
-              Real tennis: 15, 30, 40, deuce and advantage. First to {MATCH.gamesToWin} games
-              wins.
-            </dd>
-          </div>
-        </dl>
-        <p className="howto-tip">
-          Do not worry about missing a click; auto-swing covers you if you get
-          to the ball in time.
-        </p>
-      </section>
-    </ScreenShell>
-  );
-}
-
-// --- Online rooms -------------------------------------------------------
-
-/**
- * Rooms other players have opened, live. Updates as rooms open and close; a
- * room disappears the moment its host starts, cancels or leaves.
- */
-function OnlineRooms(props: { onJoin: (code: string) => void }): React.ReactElement {
-  const rooms = useStore((s) => s.rooms);
-  const online = useStore((s) => s.onlineCount);
-  const status = useStore((s) => s.directoryStatus);
-
-  return (
-    <section className="rooms" aria-labelledby="rooms-title">
-      <div className="rooms-head">
-        <h2 className="rooms-title" id="rooms-title">
-          Online rooms
-        </h2>
-        <span className="rooms-online" role="status">
-          {status === 'online' ? (
-            <>
-              <span className="net-dot net-dot-ok" aria-hidden="true" />
-              {online} {online === 1 ? 'player' : 'players'} online
-            </>
-          ) : status === 'connecting' ? (
-            <>
-              <span className="spinner" aria-hidden="true" />
-              Connecting...
-            </>
-          ) : (
-            'Offline'
-          )}
-        </span>
-      </div>
-
-      {rooms.length > 0 ? (
-        <ul className="rooms-list">
-          {rooms.map((room) => (
-            <li key={room.code} className="room">
-              <span className="chip-dot" style={{ backgroundColor: room.color }} aria-hidden="true" />
-              <span className="room-name">
-                {room.name ? `${room.name}'s room` : 'Open room'}
-                <span className="room-code mono">{room.code}</span>
-              </span>
-              <button type="button" className="btn btn-primary btn-join" onClick={() => props.onJoin(room.code)}>
-                Join
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="rooms-empty">
-          {status === 'offline'
-            ? 'The room list is unavailable right now. Invite links still work.'
-            : status === 'connecting'
-              ? 'Looking for open rooms...'
-              : 'No open rooms right now. Press Play with a Friend to open one.'}
-        </p>
-      )}
-    </section>
   );
 }
 
