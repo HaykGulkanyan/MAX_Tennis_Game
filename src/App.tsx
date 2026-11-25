@@ -847,7 +847,7 @@ export default function App() {
            * reproduces them as authored.
            */
           gl={{ toneMapping: THREE.NoToneMapping, antialias: true }}
-          camera={{ fov: CAMERA_FOV, position: initialCameraPosition(side), near: 0.1, far: 400 }}
+          camera={{ fov: CAMERA_FOV, position: initialCameraPosition(side), near: 0.1, far: 700 }}
         >
           <GameScene
             engine={engineRef.current}

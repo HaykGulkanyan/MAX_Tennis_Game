@@ -78,6 +78,17 @@ const WALL_HALF_X = FIELD_HALF_X + 1.6
  * of the screen and hide the player's feet.
  */
 const WALL_HALF_Z = FIELD_HALF_Z + 7.0
+
+/**
+ * The ground under the stadium: just past the stands and floodlights (which
+ * reach x = 20.2, z = 32). Everything beyond is the venue's map, built in
+ * Blender, which leaves a hole of |x| < 22, |z| < 36 for this plane to fill
+ * (HOLE_X / HOLE_Z in art/venues/build_venues.py). The 2m overlap sits under
+ * this plane, so the seam never shows. Keeping the plane this small is what
+ * lets a map put its sea or harbour BELOW ground level.
+ */
+const GROUND_HALF_X = 24
+const GROUND_HALF_Z = 38
 const WALL_HEIGHT = 1.1
 const WALL_THICKNESS = 0.3
 /** Coloured stripe along the inner face of the boards. */
@@ -423,9 +434,9 @@ export function Court({
       {/* ---------- Surroundings ---------- */}
 
       {/*
-        A large darker ground plane under everything, so the court reads as
-        sitting inside a venue rather than floating in the void. Dropped below
-        the court surface to keep the two from z-fighting.
+        The ground under the stadium, in the venue's ground colour; the map
+        carries it on from the edge. Dropped below the court surface to keep
+        the two from z-fighting.
       */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
@@ -433,7 +444,7 @@ export function Court({
         receiveShadow
         ref={freezeTransform}
       >
-        <planeGeometry args={[900, 900]} />
+        <planeGeometry args={[GROUND_HALF_X * 2, GROUND_HALF_Z * 2]} />
         <meshStandardMaterial
           color={pal.ground}
           roughness={1}

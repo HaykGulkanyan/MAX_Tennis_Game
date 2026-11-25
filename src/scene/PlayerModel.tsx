@@ -26,9 +26,10 @@ import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 import type { Avatar } from '../game/avatar';
+import { DRACO_PATH } from './draco';
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/player.glb`;
-useGLTF.preload(MODEL_URL);
+useGLTF.preload(MODEL_URL, DRACO_PATH);
 
 /* ------------------------------------------------------------------ *
  * The drive: what the game tells the model each frame.
@@ -338,7 +339,7 @@ type Props = {
 };
 
 export function PlayerModel({ color, avatar, baseYaw }: Props): React.ReactElement {
-  const gltf = useGLTF(MODEL_URL);
+  const gltf = useGLTF(MODEL_URL, DRACO_PATH);
   const turn = useRef<THREE.Group>(null);
 
   // One deep clone per player: its own skeleton and its own materials.

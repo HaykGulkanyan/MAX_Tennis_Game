@@ -49,6 +49,12 @@ export type VenuePalette = {
   skyTop: string;
   /** Sky at the horizon; also the fog colour, so distant ground melts into it. */
   horizon: string;
+  /**
+   * Fog start and end distance, metres. The map's landmarks stand 200-300m
+   * out and its ground runs to ~650m, inside the camera's 700m far plane, so
+   * fog ends before the far plane and the edge of the map is never seen.
+   */
+  fog: readonly [number, number];
   sun: string;
   sunIntensity: number;
   ambient: string;
@@ -67,6 +73,7 @@ export const VENUE_PALETTE: Record<Venue, VenuePalette> = {
     ground: '#e6cf98',
     skyTop: '#3b8fe0',
     horizon: '#cde8f6',
+    fog: [150, 620],
     sun: '#fff0d4',
     sunIntensity: 2.4,
     ambient: '#fff4e2',
@@ -82,6 +89,7 @@ export const VENUE_PALETTE: Record<Venue, VenuePalette> = {
     ground: '#557f3e',
     skyTop: '#6b98d6',
     horizon: '#f2d9b8',
+    fog: [150, 600],
     sun: '#ffd8a6',
     sunIntensity: 2.1,
     ambient: '#f4e6d6',
@@ -97,6 +105,7 @@ export const VENUE_PALETTE: Record<Venue, VenuePalette> = {
     ground: '#8b949c',
     skyTop: '#2f80d8',
     horizon: '#c4e2f6',
+    fog: [160, 640],
     sun: '#ffffff',
     sunIntensity: 2.2,
     ambient: '#dcebf7',

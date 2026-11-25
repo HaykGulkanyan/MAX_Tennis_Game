@@ -174,6 +174,63 @@ run, forehand, backhand, serve/overhead and celebration from that. The ball is
 struck on the same tick the swing starts, so swing clips start just before
 their contact frame, and the player winds up beforehand while the ball comes.
 
+## Venue maps
+
+The three venues are maps built **entirely by a script** in Blender, like the
+player: `art/venues/build_venues.py` writes `public/models/venue_beach.glb`,
+`venue_paris.glb` and `venue_sydney.glb`. To change a map, edit the script and
+rebuild (about 10 seconds for all three):
+
+```
+blender -b --factory-startup --python art/venues/build_venues.py --     --out public/models --draco --renders art/venues/renders --blend art/venues
+```
+
+`--renders` writes previews from the game's cameras (`art/venues/renders`,
+with `sheet.jpg` showing all nine); `--blend` saves `beach.blend` etc. to open
+and walk around in Blender (gitignored, like the player's); `--only paris`
+rebuilds one map.
+
+- **Beach:** dunes, palms, striped umbrellas and loungers, a lifeguard tower,
+  beach huts, a pier, surf, bobbing sailboats, a lighthouse islet, a headland
+  and a low sun.
+- **Paris:** the Eiffel Tower down the Champ de Mars (lawns, gravel, clipped
+  tree rows), avenues of Haussmann buildings, the gold dome of Les Invalides
+  over the rooftops, a fountain, a carousel.
+- **Sydney:** a harbourside promenade, the Opera House on its point (left), the
+  Harbour Bridge (right), ferries, the city with Sydney Tower, the North Shore.
+
+The landmarks are scaled down to fit the camera, but keep real proportions:
+the Eiffel Tower's outline is an exponential fitted to its real floors (57m,
+115m, 276m of 330m), the bridge is a 503:134 two-hinged arch with its deck at
+52m, and the Opera House has the two halls of sails plus the restaurant pair.
+
+Contracts with the game, all of which fail silently if broken:
+
+- **The hole.** A map puts nothing inside |x| < 22, |z| < 36. The court's own
+  ground plane covers |x| < 24, |z| < 38 (`GROUND_HALF_*` in `Court.tsx`). That
+  plane used to be 900m wide, which hid anything below ground level: it is
+  small now so a sea or harbour can sit lower than the court.
+- **Orientation.** A map is authored with its landmark beyond +Z; the game
+  turns it round for side 1. Sydney is built mirrored (`MIRROR` in the script)
+  so the Opera House is on the left of the view, as on the vote card.
+- **Material flags** travel as glTF extras: `flat` (faceted shading, restored in
+  the shader so the file can share vertices), `unlit`, `nofog`. Nodes named
+  `Bob_*` bob on the water and `Cloud_*` drift.
+- **Draco.** The maps are Draco-compressed (584KB for all three instead of
+  2.5MB) at 20-bit positions: the default 14 bits snaps positions to ~8cm,
+  which collapses the few-cm offsets that keep layered ground from flickering.
+  The decoder is served from `public/draco` (copied from
+  `three/examples/jsm/libs/draco/gltf`), and **every `useGLTF` call must pass
+  `DRACO_PATH`**: drei shares one loader and each call resets its path.
+- **Distance.** The camera's far plane went 400 -> 700m and each palette now
+  has its own fog range, so the 200-300m landmarks are clear and the edge of
+  the map (~650m) is always fogged out.
+
+Worth knowing when judging a map: the default broadcast camera looks down
+about 26 degrees, so it sees the ground beyond the far stand (beach, lawns,
+harbour, boats) but cuts off the tops of tall landmarks. The skyline is what
+the third-person camera (C) shows.
+
 ## Physics notes worth keeping
 
 These were all found by the checks, and each one is load-bearing. Changing any
