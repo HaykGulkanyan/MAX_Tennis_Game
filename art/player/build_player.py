@@ -1498,77 +1498,9 @@ def cheer_keys():
     return [(0.0, READY), (0.2, a), (0.45, pump), (0.65, low), (0.85, pump), (1.25, a), (1.6, READY)], 1.6
 
 
-# --------------------------------------------------------------------------
-# Build
-# --------------------------------------------------------------------------
-
-print("building body")
-body = build_body()
-print("  body faces", len(body.data.polygons))
-head = build_head()
-caster = FaceCaster(head)
-eyes, lids = build_eyes(caster)
-face_parts = build_face(caster)
-hands = build_hands()
-shoes = build_shoes()
-hair = build_hair()
-cap, band, bands = build_headwear()
-racket, strings = build_racket()
-
-rig = build_armature()
-
-# Racket in the right hand at rest; remember the hand -> racket offset.
-for side, f in (("R", 1), ("L", -1)):
-    hand_rest = rig.data.bones[f"hand.{side}"].matrix_local
-    RACKET_OFFSET[side] = hand_rest.inverted() @ grip_frame(f)
-place(racket, grip_frame(1))
-place(strings, grip_frame(1))
-
-print("binding body")
-bind_auto(body, rig)
-shirt, shorts = build_clothes(body)
-for garment_ob in (shirt, shorts):
-    # The shells were copied from the weighted body, so they deform with it.
-    garment_ob.parent = rig
-    if not any(m.type == "ARMATURE" for m in garment_ob.modifiers):
-        mod = garment_ob.modifiers.new("Armature", "ARMATURE")
-        mod.object = rig
-
-# Rigid parts. Head pieces follow the head bone, and so on.
-shoeR, shoeL = shoes
-rigid = [(head, "head"), (eyes, "head"), (lids, "head"), (shoeR, "foot.R"), (shoeL, "foot.L"),
-         (racket, "hand.R"), (strings, "hand.R"), (cap, "head"), (band, "head")]
-rigid += [(o, "head") for o in face_parts + hair]
-for ob, bone in rigid:
-    bind_rigid(ob, rig, bone)
-
-# Hands and wristbands deform with both the forearm and hand.
-for ob in (hands, bands):
-    for side, f in (("R", 1), ("L", -1)):
-        vg_h = ob.vertex_groups.get(f"hand.{side}") or ob.vertex_groups.new(name=f"hand.{side}")
-        vg_f = ob.vertex_groups.get(f"forearm.{side}") or ob.vertex_groups.new(name=f"forearm.{side}")
-        for v in ob.data.vertices:
-            if v.co.x * f <= 0:
-                continue
-            t = (v.co - WRIST * V(f, 1, 1)).dot(HAND_DIR * V(f, 1, 1))
-            w = smoothstep(-0.02, 0.015, t)
-            vg_h.add([v.index], w, "REPLACE")
-            vg_f.add([v.index], 1 - w, "REPLACE")
-    ob.parent = rig
-    mod = ob.modifiers.new("Armature", "ARMATURE")
-    mod.object = rig
-
-# Merge the always-visible pieces into one body mesh: fewer draw calls.
-activate(body)
-for ob in (head, eyes, lids, shoeR, shoeL, hands, shirt, shorts):
-    ob.select_set(True)
-bpy.ops.object.join()
-body = bpy.context.view_layer.objects.active
-body.name = "Body"
-racket = join([racket, strings], "Racket")
-
-print("animating")
-anims = {
+# Every animation clip: key-pose function and whether it loops. Other
+# characters (art/player/build_max.py) bake the same list onto their own rig.
+ANIMS = {
     "Idle": (idle_keys, True),
     "Run": (run_keys, True),
     "Forehand": (forehand_keys, False),
@@ -1576,44 +1508,123 @@ anims = {
     "Serve": (serve_keys, False),
     "Cheer": (cheer_keys, False),
 }
-ACTIONS = {}
-for name, (fn, loop) in anims.items():
-    keys, length = fn()
-    ACTIONS[name] = bake(rig, name, keys, length, loop)
-    print("  ", name, length)
 
-# Back to rest for export.
-for b in rig.pose.bones:
-    b.rotation_quaternion = (1, 0, 0, 0)
-    b.location = (0, 0, 0)
 
-# Tidy for export: valid meshes, at most four bone influences per vertex.
-for ob in bpy.data.objects:
-    if ob.type == "MESH":
-        ob.data.validate()
-activate(body)
-bpy.ops.object.vertex_group_limit_total(limit=4)
-bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+# --------------------------------------------------------------------------
+# Build
+# --------------------------------------------------------------------------
 
-counts = {o.name: len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH"}
-print("FACES", sum(counts.values()), counts)
+def main():
+    print("building body")
+    body = build_body()
+    print("  body faces", len(body.data.polygons))
+    head = build_head()
+    caster = FaceCaster(head)
+    eyes, lids = build_eyes(caster)
+    face_parts = build_face(caster)
+    hands = build_hands()
+    shoes = build_shoes()
+    hair = build_hair()
+    cap, band, bands = build_headwear()
+    racket, strings = build_racket()
 
-if OUT_GLB:
-    os.makedirs(os.path.dirname(os.path.abspath(OUT_GLB)), exist_ok=True)
-    bpy.ops.export_scene.gltf(
-        filepath=OUT_GLB, export_format="GLB", export_animations=True,
-        export_animation_mode="NLA_TRACKS", export_force_sampling=True,
-        export_skins=True, export_all_influences=False, export_yup=True,
-        export_apply=False, export_materials="EXPORT", export_cameras=False,
-        export_lights=False, export_extras=False, export_morph=False,
-        export_texcoords=True, export_normals=True,
-    )
-    print("exported", OUT_GLB, os.path.getsize(OUT_GLB))
+    rig = build_armature()
 
-if OUT_BLEND:
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(OUT_BLEND))
+    # Racket in the right hand at rest; remember the hand -> racket offset.
+    for side, f in (("R", 1), ("L", -1)):
+        hand_rest = rig.data.bones[f"hand.{side}"].matrix_local
+        RACKET_OFFSET[side] = hand_rest.inverted() @ grip_frame(f)
+    place(racket, grip_frame(1))
+    place(strings, grip_frame(1))
 
-if OUT_RENDERS:
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import render_previews  # noqa: E402  (lives next to this file)
-    render_previews.render_all(OUT_RENDERS, rig, ACTIONS, MATS)
+    print("binding body")
+    bind_auto(body, rig)
+    shirt, shorts = build_clothes(body)
+    for garment_ob in (shirt, shorts):
+        # The shells were copied from the weighted body, so they deform with it.
+        garment_ob.parent = rig
+        if not any(m.type == "ARMATURE" for m in garment_ob.modifiers):
+            mod = garment_ob.modifiers.new("Armature", "ARMATURE")
+            mod.object = rig
+
+    # Rigid parts. Head pieces follow the head bone, and so on.
+    shoeR, shoeL = shoes
+    rigid = [(head, "head"), (eyes, "head"), (lids, "head"), (shoeR, "foot.R"), (shoeL, "foot.L"),
+             (racket, "hand.R"), (strings, "hand.R"), (cap, "head"), (band, "head")]
+    rigid += [(o, "head") for o in face_parts + hair]
+    for ob, bone in rigid:
+        bind_rigid(ob, rig, bone)
+
+    # Hands and wristbands deform with both the forearm and hand.
+    for ob in (hands, bands):
+        for side, f in (("R", 1), ("L", -1)):
+            vg_h = ob.vertex_groups.get(f"hand.{side}") or ob.vertex_groups.new(name=f"hand.{side}")
+            vg_f = ob.vertex_groups.get(f"forearm.{side}") or ob.vertex_groups.new(name=f"forearm.{side}")
+            for v in ob.data.vertices:
+                if v.co.x * f <= 0:
+                    continue
+                t = (v.co - WRIST * V(f, 1, 1)).dot(HAND_DIR * V(f, 1, 1))
+                w = smoothstep(-0.02, 0.015, t)
+                vg_h.add([v.index], w, "REPLACE")
+                vg_f.add([v.index], 1 - w, "REPLACE")
+        ob.parent = rig
+        mod = ob.modifiers.new("Armature", "ARMATURE")
+        mod.object = rig
+
+    # Merge the always-visible pieces into one body mesh: fewer draw calls.
+    activate(body)
+    for ob in (head, eyes, lids, shoeR, shoeL, hands, shirt, shorts):
+        ob.select_set(True)
+    bpy.ops.object.join()
+    body = bpy.context.view_layer.objects.active
+    body.name = "Body"
+    racket = join([racket, strings], "Racket")
+
+    print("animating")
+    ACTIONS = {}
+    for name, (fn, loop) in ANIMS.items():
+        keys, length = fn()
+        ACTIONS[name] = bake(rig, name, keys, length, loop)
+        print("  ", name, length)
+
+    # Back to rest for export.
+    for b in rig.pose.bones:
+        b.rotation_quaternion = (1, 0, 0, 0)
+        b.location = (0, 0, 0)
+
+    # Tidy for export: valid meshes, at most four bone influences per vertex.
+    for ob in bpy.data.objects:
+        if ob.type == "MESH":
+            ob.data.validate()
+    activate(body)
+    bpy.ops.object.vertex_group_limit_total(limit=4)
+    bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+
+    counts = {o.name: len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH"}
+    print("FACES", sum(counts.values()), counts)
+
+    if OUT_GLB:
+        os.makedirs(os.path.dirname(os.path.abspath(OUT_GLB)), exist_ok=True)
+        bpy.ops.export_scene.gltf(
+            filepath=OUT_GLB, export_format="GLB", export_animations=True,
+            export_animation_mode="NLA_TRACKS", export_force_sampling=True,
+            export_skins=True, export_all_influences=False, export_yup=True,
+            export_apply=False, export_materials="EXPORT", export_cameras=False,
+            export_lights=False, export_extras=False, export_morph=False,
+            export_texcoords=True, export_normals=True,
+        )
+        print("exported", OUT_GLB, os.path.getsize(OUT_GLB))
+
+    if OUT_BLEND:
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(OUT_BLEND))
+
+    if OUT_RENDERS:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import render_previews  # noqa: E402  (lives next to this file)
+        render_previews.render_all(OUT_RENDERS, rig, ACTIONS, MATS)
+
+
+# Importing this file (as build_max.py does) gives the rig, posing and
+# animation tools without building the default player.
+if __name__ == "__main__":
+    main()

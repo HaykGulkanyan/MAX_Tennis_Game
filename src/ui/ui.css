@@ -347,6 +347,14 @@ kbd {
   min-width: 0;
 }
 
+/* A line of explanation inside a panel, e.g. why Max has no look options. */
+.field-note {
+  margin: 0 0 var(--gap);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
 .field-label {
   padding: 0;
   font-size: 0.78rem;

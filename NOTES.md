@@ -231,6 +231,32 @@ about 26 degrees, so it sees the ground beyond the far stand (beach, lawns,
 harbour, boats) but cuts off the tops of tall landmarks. The skyline is what
 the third-person camera (C) shows.
 
+### Max, the default character
+
+Max (`public/models/max.glb`) is the character everyone starts as; the
+build-your-own player is the other choice on the Customize screen, and the
+computer opponent always uses it so the two players never look alike.
+
+He comes from `Max.glb`, a 60MB, 1.9M-triangle AI-generated sculpt with no
+skeleton. It is kept out of git (see `.gitignore`); keep a copy to rebuild:
+
+```
+blender -b --factory-startup --python art/player/build_max.py --     --src Max.glb --glb public/models/max.glb --renders art/player/renders/max
+```
+
+`build_max.py` shrinks the sculpt to 22k triangles, bakes its colour and
+surface detail onto the new mesh, gives it the default player's skeleton fitted
+to his child proportions, and bakes the SAME animations by running
+`build_player.py`'s key poses and IK with every position rescaled to his
+shorter limbs (it imports `build_player.py`, whose build only runs as a
+script). His joint positions are measured from that particular sculpt, so a
+different sculpt needs new landmarks.
+
+His arms rest against his sides, which glues arm and torso together under
+automatic weights. `separate_arms` untangles them by surface direction, and
+`smooth_weights` keeps the loose sleeves from tearing when an arm goes
+overhead. If a new pose shows a torn sleeve or a spike, look there first.
+
 ## Physics notes worth keeping
 
 These were all found by the checks, and each one is load-bearing. Changing any

@@ -14,6 +14,18 @@
 import { SHIRT_COLORS } from './constants';
 import type { PlayerProfile } from './types';
 
+/**
+ * Who the player is. 'max' is Max, a ready-made character with his own kit
+ * (public/models/max.glb); 'custom' is the build-your-own player, which every
+ * other option on the Customize screen shapes. Max is the default.
+ */
+export const CHARACTERS = ['max', 'custom'] as const;
+export type Character = (typeof CHARACTERS)[number];
+export const CHARACTER_LABELS: Record<Character, string> = {
+  max: 'Max',
+  custom: 'Create your own',
+};
+
 export const HAIR_STYLES = ['none', 'short', 'spiky', 'long', 'ponytail', 'afro', 'mohawk'] as const;
 export const SHIRT_DESIGNS = ['plain', 'stripes', 'hoops', 'sash', 'star', 'number'] as const;
 export const FACES = ['happy', 'focused', 'angry', 'surprised', 'cool'] as const;
@@ -66,6 +78,8 @@ export const SHOE_COLORS = ['#f4f7fa', '#1c2230', '#e8503a', '#2f7fe8', '#c8f24a
 export const RACKET_COLORS = ['#22262e', '#e8503a', '#2f7fe8', '#f0b429', '#e05aa8', '#f4f7fa'] as const;
 
 export type Avatar = {
+  /** Max, or the custom player the rest of these fields describe. */
+  character: Character;
   hairStyle: HairStyle;
   hairColor: string;
   skin: string;
@@ -82,6 +96,7 @@ export type Avatar = {
 };
 
 export const DEFAULT_AVATAR: Avatar = {
+  character: 'max',
   hairStyle: 'short',
   hairColor: HAIR_COLORS[1],
   skin: SKIN_TONES[2],
@@ -97,6 +112,8 @@ export const DEFAULT_AVATAR: Avatar = {
 
 /** The computer opponent's look: sunglasses and a cap, all business. */
 export const COMPUTER_AVATAR: Avatar = {
+  // Custom, so the computer never looks like you when you play as Max.
+  character: 'custom',
   hairStyle: 'none',
   hairColor: HAIR_COLORS[0],
   skin: SKIN_TONES[3],
@@ -113,6 +130,7 @@ export const COMPUTER_AVATAR: Avatar = {
 /** The practice wall's stand-in: deliberately plain grey. */
 export const WALL_AVATAR: Avatar = {
   ...DEFAULT_AVATAR,
+  character: 'custom',
   hairStyle: 'none',
   skin: '#8a94a6',
   shorts: '#6b7280',
@@ -138,6 +156,7 @@ export function sanitizeAvatar(raw: unknown): Avatar {
   const a = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   const number = Number(a.shirtNumber);
   return {
+    character: pick(a.character, CHARACTERS, DEFAULT_AVATAR.character),
     hairStyle: pick(a.hairStyle, HAIR_STYLES, DEFAULT_AVATAR.hairStyle),
     hairColor: color(a.hairColor, DEFAULT_AVATAR.hairColor),
     skin: color(a.skin, DEFAULT_AVATAR.skin),
@@ -167,11 +186,15 @@ function any<T>(items: readonly T[], random: () => number): T {
   return items[Math.floor(random() * items.length)];
 }
 
-/** A random look and shirt colour, for the Randomize button. */
+/**
+ * A random look and shirt colour, for the Randomize button. Max's look is
+ * fixed, so randomizing always gives a custom player.
+ */
 export function randomLook(random: () => number = Math.random): { color: string; avatar: Avatar } {
   return {
     color: any(SHIRT_COLORS, random),
     avatar: {
+      character: 'custom',
       hairStyle: any(HAIR_STYLES, random),
       hairColor: any(HAIR_COLORS, random),
       skin: any(SKIN_TONES, random),

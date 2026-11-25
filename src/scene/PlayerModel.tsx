@@ -7,6 +7,11 @@
  * component clones it per player, recolours its materials from the profile and
  * shows only the variants that profile picked.
  *
+ * Max (public/models/max.glb, built by art/player/build_max.py from his
+ * sculpt) is the other character. He has the same skeleton and animations but
+ * his own fixed kit, so the only thing recoloured on him is the racket; every
+ * option below that he lacks is simply skipped.
+ *
  * Names are the contract with the Blender script: parts are found by object
  * name (Hair_short, Mouth_grin...) and recoloured by material name (Skin,
  * Shirt...). Rename something there and it must be renamed here.
@@ -28,8 +33,12 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { Avatar } from '../game/avatar';
 import { DRACO_PATH } from './draco';
 
-const MODEL_URL = `${import.meta.env.BASE_URL}models/player.glb`;
-useGLTF.preload(MODEL_URL, DRACO_PATH);
+const MODEL_URLS: Record<Avatar['character'], string> = {
+  max: `${import.meta.env.BASE_URL}models/max.glb`,
+  custom: `${import.meta.env.BASE_URL}models/player.glb`,
+};
+useGLTF.preload(MODEL_URLS.max, DRACO_PATH);
+useGLTF.preload(MODEL_URLS.custom, DRACO_PATH);
 
 /* ------------------------------------------------------------------ *
  * The drive: what the game tells the model each frame.
@@ -339,7 +348,7 @@ type Props = {
 };
 
 export function PlayerModel({ color, avatar, baseYaw }: Props): React.ReactElement {
-  const gltf = useGLTF(MODEL_URL, DRACO_PATH);
+  const gltf = useGLTF(MODEL_URLS[avatar.character], DRACO_PATH);
   const turn = useRef<THREE.Group>(null);
 
   // One deep clone per player: its own skeleton and its own materials.
@@ -383,12 +392,21 @@ export function PlayerModel({ color, avatar, baseYaw }: Props): React.ReactEleme
     () => () => {
       rig.mixer.stopAllAction();
       materials.forEach((m) => {
-        m.map?.dispose();
+        // Only textures painted here (shirt print, strings). A model's own
+        // texture, like Max's, is shared with the cached file and other clones.
+        if (m.map instanceof THREE.CanvasTexture) m.map.dispose();
         m.dispose();
       });
     },
     [rig, materials],
   );
+
+  // A new model (switching character) means a new mixer: drop any swing or
+  // celebration that belonged to the old one.
+  useEffect(() => {
+    anim.current.shot = null;
+    anim.current.shotW = 0;
+  }, [rig]);
 
   /** Animation state that lives across frames but never needs a render. */
   const anim = useRef({

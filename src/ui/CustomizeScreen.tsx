@@ -1,8 +1,9 @@
 /**
  * Customize: change how your player looks, with a live 3D preview.
  *
- * Six tabs (Hair, Skin, Shirt, Shoes, Face, Extras), a Randomize button, and a
- * preview you can drag to turn. Every change is saved straight away (the store
+ * First pick a character: Max (the default, with his own fixed kit) or a
+ * player you build yourself with six tabs (Hair, Skin, Shirt, Shoes, Face,
+ * Extras). Then a Randomize button, and a preview you can drag to turn. Every change is saved straight away (the store
  * writes the profile to localStorage), so there is nothing to confirm; Done
  * just goes back to wherever the player came from.
  */
@@ -16,6 +17,8 @@ import {
   ACCENT_COLORS,
   ACCESSORIES,
   ACCESSORY_LABELS,
+  CHARACTERS,
+  CHARACTER_LABELS,
   FACES,
   FACE_LABELS,
   HAIR_COLORS,
@@ -311,9 +314,30 @@ function TabPanel({ tab }: { tab: Tab }): React.ReactElement {
   }
 }
 
+/** Max wears his own kit, so the only thing left to choose is the racket. */
+function MaxPanel(): React.ReactElement {
+  const avatar = useStore((s) => s.profile.avatar);
+  const setAvatar = useStore((s) => s.setAvatar);
+  return (
+    <>
+      <p className="field-note">
+        Max plays in his own kit. Pick &ldquo;Create your own&rdquo; to design a player from scratch.
+      </p>
+      <Swatches
+        label="Racket colour"
+        colors={RACKET_COLORS}
+        value={avatar.racket}
+        onPick={(racket) => setAvatar({ racket })}
+      />
+    </>
+  );
+}
+
 export function CustomizeScreen(props: { onDone: () => void }): React.ReactElement {
   const [tab, setTab] = useState<Tab>('hair');
   const setProfile = useStore((s) => s.setProfile);
+  const setAvatar = useStore((s) => s.setAvatar);
+  const character = useStore((s) => s.profile.avatar.character);
 
   return (
     <ScreenShell wide>
@@ -326,6 +350,19 @@ export function CustomizeScreen(props: { onDone: () => void }): React.ReactEleme
         <Preview />
 
         <div className="customize-controls">
+          <Choices
+            label="Character"
+            options={CHARACTERS}
+            labels={CHARACTER_LABELS}
+            value={character}
+            onPick={(next) => setAvatar({ character: next })}
+          />
+          {character === 'max' ? (
+            <div className="customize-panel">
+              <MaxPanel />
+            </div>
+          ) : (
+            <>
           <div className="customize-tabs" role="tablist" aria-label="What to change">
             {TABS.map((t) => (
               <button
@@ -343,6 +380,8 @@ export function CustomizeScreen(props: { onDone: () => void }): React.ReactEleme
           <div className="customize-panel" role="tabpanel">
             <TabPanel tab={tab} />
           </div>
+            </>
+          )}
         </div>
       </div>
 

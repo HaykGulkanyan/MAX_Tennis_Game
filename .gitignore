@@ -31,3 +31,8 @@ Thumbs.db
 # Blender working files (the model is rebuilt from art/player/build_player.py)
 *.blend
 *.blend1
+
+# Max's source sculpt (60MB). The game uses public/models/max.glb, built from it by
+# art/player/build_max.py; keep the sculpt locally to rebuild him.
+/Max.glb
+__pycache__/
