@@ -405,8 +405,9 @@ def main():
     actions = {}
     for name, (fn, loop) in bp.ANIMS.items():
         keys, length = fn()
-        keys = [(t, to_max(p)) for t, p in keys]
+        keys = keep_face_clear(name, [(t, to_max(p)) for t, p in keys])
         actions[name] = bp.bake(rig, name, keys, length, loop)
+    report_racket_over_face(rig, actions)
 
     for b in rig.pose.bones:
         b.rotation_quaternion = (1, 0, 0, 0)
@@ -459,6 +460,102 @@ def main():
 
         if "--qa" in argv:
             qa_sheet(rig, actions, out_dir, cam)
+
+
+def keep_face_clear(name, keys):
+    """
+    Max-only changes to the swings, so the racket never sweeps across his face.
+
+    The default player twists his whole body round to finish a swing, which
+    with Max's big, low head turns his face straight into the racket; and on
+    the way back to the ready stance the racket passes right in front of it.
+    So Max twists half as far, finishes with the racket out over his shoulder,
+    and brings it back low, at waist height. The serve comes down his right
+    side instead of across his face. `report_racket_over_face` checks the
+    result frame by frame.
+    """
+    def finish(p, grip, shaft):
+        q = dict(p)
+        for k in ("hipr", "spine", "chest"):
+            x, y, z = q[k]
+            q[k] = (x, y, z * 0.5)
+        q["grip"], q["shaft"], q["tilt"] = grip, shaft, 0.0
+        return q
+
+    def recover(ready, grip, shaft):
+        q = dict(ready)
+        q["grip"], q["shaft"], q["tilt"] = grip, shaft, 0.0
+        return q
+
+    def through(p, grip, shaft):
+        """The swing-through after contact: low, across the waist."""
+        q = dict(p)
+        q["grip"], q["shaft"], q["tilt"] = grip, shaft, 0.0
+        return q
+
+    out = list(keys)
+    ready = keys[-1][1]
+    contact = keys[2][1]
+    if name == "Forehand":
+        out = [(t, finish(p, (-0.3, -0.04, 1.08), (-0.7, -0.55, 0.45)) if t >= 0.3 and t < 0.8 else p)
+               for t, p in keys]
+        out.insert(3, (0.23, through(contact, (0.05, 0.3, 0.95), (-0.6, 0.6, 0.1))))
+        out.insert(-1, (0.67, recover(ready, (-0.1, 0.3, 0.82), (-0.45, 0.8, -0.25))))
+    elif name == "Backhand":
+        out = [(t, finish(p, (0.34, -0.04, 1.08), (0.7, -0.55, 0.45)) if t >= 0.3 and t < 0.8 else p)
+               for t, p in keys]
+        out.insert(3, (0.23, through(contact, (0.0, 0.3, 0.95), (0.6, 0.6, 0.1))))
+        out.insert(-1, (0.67, recover(ready, (0.32, 0.26, 0.82), (0.35, 0.85, -0.25))))
+    elif name == "Serve":
+        # Loop the racket up BEHIND his head: blending straight from hanging
+        # down his back to pointing up swings it through the front instead.
+        loop = dict(keys[0][1])
+        loop["grip"], loop["shaft"], loop["tilt"] = (0.28, -0.06, 1.42), (0.15, -0.9, 0.35), 0.0
+        down = dict(keys[1][1])
+        down["grip"], down["shaft"], down["tilt"] = (0.36, 0.18, 1.12), (0.45, 0.55, -0.65), 0.0
+        out = [keys[0], (0.07, loop), keys[1], (0.25, down)] + keys[2:]
+    elif name == "Cheer":
+        # Pump the fist out by his side, not up beside his cheek.
+        for t, p in out:
+            x, y, z = p["lhFree"]
+            if z > 1.1:
+                p["lhFree"] = (x - 0.12, y - 0.08, z)
+    return out
+
+
+def report_racket_over_face(rig, actions):
+    """
+    Check every frame of every animation for the racket head passing in front
+    of Max's face, and print the frames where it does. His head is big and
+    low, so swings that clear the default player's face can cover his.
+    """
+    ad = rig.animation_data
+    for track in ad.nla_tracks:
+        track.mute = True
+    scene = bpy.context.scene
+    head_center = Vector((0, 0, (bp.SHAFT_TO_HEAD + bp.RACKET_HEAD_LEN) * RACKET_SCALE))
+    bad = []
+    for name, action in actions.items():
+        ad.action = action
+        start, end = (int(x) for x in action.frame_range)
+        for f in range(start, end + 1):
+            scene.frame_set(f)
+            pb = rig.pose.bones
+            racket = (pb["hand.R"].matrix @ bp.RACKET_OFFSET["R"]) @ head_center
+            head = pb["head"]
+            face = head.head.lerp(head.tail, 0.4)
+            forward = (head.matrix.to_3x3() @ head.bone.matrix_local.to_3x3().inverted()) @ Vector((0, 1, 0))
+            # Anywhere in the column in front of his face covers it from the
+            # camera, however far out: test the sideways/vertical offset.
+            d = racket - face
+            ahead = d.dot(forward)
+            across = (d - forward * ahead).length
+            if -0.02 < ahead < 0.9 and across < 0.2:
+                bad.append(f"{name}@{f}")
+    ad.action = None
+    for track in ad.nla_tracks:
+        track.mute = False
+    print("RACKET OVER FACE:", ", ".join(bad) if bad else "none")
 
 
 def qa_sheet(rig, actions, out_dir, cam):
