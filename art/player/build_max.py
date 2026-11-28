@@ -65,8 +65,10 @@ ANKLE = P(0.097, 0.03, 0.07)
 TOE = P(0.11, -0.075, 0.02)
 SHOULDER = P(0.115, 0.01, 0.70)
 ELBOW = P(0.14, 0.005, 0.595)
-WRIST = P(0.146, -0.013, 0.50)
-HAND_TIP = P(0.15, -0.045, 0.43)
+# The wrist is the arm's narrowest point below the sleeve (z 0.45); his
+# hand is big, with the palm at about 0.395 and the fingertips near 0.345.
+WRIST = P(0.153, -0.035, 0.45)
+HAND_TIP = P(0.15, -0.06, 0.345)
 
 
 def bones():
@@ -223,10 +225,12 @@ def to_max(p):
         q["elbowL"] = (-0.9, -0.3, -0.6)
         # That is the ready stance. The default player holds the racket upright
         # under his chin; on Max, whose head is bigger and lower, upright covers
-        # his face. Hold it out to the right and angled forward instead.
+        # his face. So he holds it in front of his belly, pointing forward and
+        # a little up: in front of him, as a ready stance should be, with the
+        # head well below his face. (The idle's small bounce rides on gz.)
         gx, gy, gz = q["grip"]
-        q["grip"] = (gx + 0.09, max(gy, 0.28), gz - 0.02)
-        q["shaft"] = (0.1, 0.75, 0.65)
+        q["grip"] = (0.1, 0.26, gz - 0.06)
+        q["shaft"] = (-0.08, 0.88, 0.47)
         q["tilt"] = 0.0
     return q
 
@@ -270,7 +274,8 @@ def grip_frame(f=1):
     x = (palm - shaft * palm.dot(shaft)).normalized()
     y = shaft.cross(x)
     m = Matrix((x, y, shaft)).transposed().to_4x4()
-    m.translation = wrist + hand_dir * (tip - wrist).length * 0.55
+    # In the middle of the palm, where the handle sits in a real grip.
+    m.translation = wrist + hand_dir * (tip - wrist).length * 0.48
     return m
 
 
@@ -328,6 +333,42 @@ def separate_arms(lo):
                 else:
                     by_name[nearest_torso_bone(v.co)].add([v.index], 1.0, "REPLACE")
     print("  untangled arm weights", moved)
+
+
+def solid_hands(lo):
+    """
+    Make each hand follow its hand bone completely, blending to the forearm
+    only across the wrist. The racket is fixed to the hand bone, and the hand
+    bone turns to aim the racket; automatic weights left much of Max's hand on
+    the forearm, so the visible hand stayed behind and the racket floated
+    beside it instead of sitting in his palm.
+    """
+    groups = {g.index: g.name for g in lo.vertex_groups}
+    by_name = {g.name: g for g in lo.vertex_groups}
+    for f, s in ((1, "R"), (-1, "L")):
+        X = lambda p: Vector((p.x * f, p.y, p.z))
+        wrist, tip = X(WRIST), X(HAND_TIP)
+        axis = (tip - wrist).normalized()
+        length = (tip - wrist).length
+        for v in lo.data.vertices:
+            if v.co.x * f <= 0:
+                continue
+            # Only vertices that already belong to this arm: the hand hangs
+            # right beside his trousers, which must not come along.
+            arm = sum(g.weight for g in v.groups
+                      if groups[g.group].startswith(ARM_BONES) and groups[g.group].endswith(s))
+            if arm < 0.5:
+                continue
+            t = (v.co - wrist).dot(axis)
+            radial = (v.co - wrist - axis * t).length
+            if t < -0.03 * K or t > length + 0.05 * K or radial > 0.05 * K:
+                continue
+            w = bp.smoothstep(-0.012 * K, 0.008 * K, t)
+            for g in list(v.groups):
+                lo.vertex_groups[g.group].remove([v.index])
+            by_name[f"hand.{s}"].add([v.index], w, "REPLACE")
+            if w < 1:
+                by_name[f"forearm.{s}"].add([v.index], 1 - w, "REPLACE")
 
 
 def smooth_weights(lo, iterations=4, factor=0.5):
@@ -397,6 +438,7 @@ def main():
     bp.bind_auto(lo, rig)
     separate_arms(lo)
     smooth_weights(lo)
+    solid_hands(lo)
     for ob in (racket, strings):
         bp.bind_rigid(ob, rig, "hand.R")
     racket = bp.join([racket, strings], "Racket")
@@ -581,6 +623,23 @@ def qa_sheet(rig, actions, out_dir, cam):
         rp.contact_sheet(paths, os.path.join(out_dir, f"qa_{view}.png"), cols=5)
         for p in paths:
             os.remove(p)
+
+    # Close-ups of the racket hand: is the racket actually in his palm?
+    paths = []
+    for name, t in (("Idle", 0.0), ("Run", 0.1), ("Forehand", 0.15), ("Backhand", 0.15),
+                    ("Serve", 0.14), ("Cheer", 0.45)):
+        for yaw in (-35, 50):
+            rp.set_pose(rig, actions, name, t)
+            hand = rig.pose.bones["hand.R"]
+            target = hand.head.lerp(hand.tail, 0.5)
+            rp.aim_camera(cam, yaw, dist=0.9, height=target.z, target=tuple(target))
+            path = os.path.join(out_dir, f"qa_hand_{name}_{yaw}.png")
+            scene.render.filepath = path
+            bpy.ops.render.render(write_still=True)
+            paths.append(path)
+    rp.contact_sheet(paths, os.path.join(out_dir, "qa_hands.png"), cols=4)
+    for p in paths:
+        os.remove(p)
 
 
 main()
