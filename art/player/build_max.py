@@ -209,10 +209,54 @@ def to_max(p):
     q["hip"] = (hx * LEG_S, hy * LEG_S, hz * LEG_S)
     q["ankR"] = leg(p["ankR"])
     q["ankL"] = leg(p["ankL"])
-    q["grip"] = arm(p["grip"], 1)
-    q["lhFree"] = arm(p["lhFree"], -1)
+    q["grip"] = clear_of_torso(arm(p["grip"], 1), 1)
+    q["lhFree"] = clear_of_torso(arm(p["lhFree"], -1), -1)
     q["lhSlide"] = p["lhSlide"] * RACKET_SCALE
+
+    # The default player rests his left hand on the racket's throat. Max's arms
+    # are too short for his chest: reaching across, the left arm goes straight
+    # through his body. So unless the racket is on his left (a two-handed
+    # backhand), his left hand rests in front of his left hip instead.
+    if q["grip"][0] > -0.02 and p["lhOn"] > 0:
+        q["lhOn"] = 0.0
+        q["lhFree"] = OFF_HAND_REST
+        q["elbowL"] = (-0.9, -0.3, -0.6)
+        # That is the ready stance. The default player holds the racket upright
+        # under his chin; on Max, whose head is bigger and lower, upright covers
+        # his face. Hold it out to the right and angled forward instead.
+        gx, gy, gz = q["grip"]
+        q["grip"] = (gx + 0.09, max(gy, 0.28), gz - 0.02)
+        q["shaft"] = (0.1, 0.75, 0.65)
+        q["tilt"] = 0.0
     return q
+
+
+# Max's torso, as an ellipse seen from above (build space, metres), with room
+# for the arm's own thickness. An arm passing through it is inside his body.
+TORSO_A = 0.21
+TORSO_B = 0.17
+OFF_HAND_REST = (-0.25, 0.16, 0.9)
+
+
+def clear_of_torso(target, side):
+    """
+    Push a hand target forward until the straight reach from that shoulder to
+    it no longer cuts through Max's chest or belly. Only matters below
+    shoulder height; overhead the arm is clear of the body anyway.
+    """
+    sx, sy, sz = side * SHOULDER.x, SHOULDER.y, SHOULDER.z
+    x, y, z = target
+    for _ in range(40):
+        inside = False
+        for t in (0.2, 0.35, 0.5, 0.65, 0.8, 1.0):
+            px, py, pz = sx + (x - sx) * t, sy + (y - sy) * t, sz + (z - sz) * t
+            if pz < sz + 0.05 and (px / TORSO_A) ** 2 + (py / TORSO_B) ** 2 < 1:
+                inside = True
+                break
+        if not inside:
+            break
+        y += 0.01
+    return (x, y, z)
 
 
 def grip_frame(f=1):
@@ -412,6 +456,34 @@ def main():
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
         rp.contact_sheet(paths, os.path.join(out_dir, "sheet.png"), cols=3)
+
+        if "--qa" in argv:
+            qa_sheet(rig, actions, out_dir, cam)
+
+
+def qa_sheet(rig, actions, out_dir, cam):
+    """
+    Every animation at five moments, from his left-front and from the front:
+    the views where an arm going through the body shows up. Written to
+    qa_left.png and qa_front.png; not committed, just for checking a build.
+    """
+    import render_previews as rp
+    scene = bpy.context.scene
+    scene.render.resolution_x, scene.render.resolution_y = 300, 400
+    for view, yaw in (("left", -40), ("front", 0)):
+        paths = []
+        for name, action in actions.items():
+            length = action.frame_range[1] / bp.FPS
+            for i in range(5):
+                rp.set_pose(rig, actions, name, length * i / 5)
+                rp.aim_camera(cam, yaw, dist=5.2, height=1.1, target=(0, 0.05, 0.95))
+                path = os.path.join(out_dir, f"qa_{view}_{name}_{i}.png")
+                scene.render.filepath = path
+                bpy.ops.render.render(write_still=True)
+                paths.append(path)
+        rp.contact_sheet(paths, os.path.join(out_dir, f"qa_{view}.png"), cols=5)
+        for p in paths:
+            os.remove(p)
 
 
 main()
